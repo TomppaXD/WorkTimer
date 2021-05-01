@@ -26,6 +26,8 @@ namespace WorkTimer
 
         Settings Settings { get; set; }
 
+        private string ErrorLogPath => Path.Combine($"{Settings.LogPath}", $"error_{DateTime.Now.Ticks}.txt");
+
         public delegate void UpdateTextCallback(string text);
 
         public delegate void InvokeDelegate();
@@ -37,71 +39,102 @@ namespace WorkTimer
          */
         public Form1()
         {
-            InitializeComponent();
-            Settings = ReadJsonFile<Settings>("settings.json");
-            Timer = new System.Timers.Timer();
-            Timer.Interval = 60000;
-            Timer.Elapsed += OnTimedEvent;
+            try
+            {
+                InitializeComponent();
+                Settings = ReadJsonFile<Settings>("settings.json");
+                Timer = new System.Timers.Timer();
+                Timer.Interval = 60000;
+                Timer.Elapsed += OnTimedEvent;
 
-            Timer.AutoReset = true;
-            Timer.Enabled = true;
-            this.notifyIcon1.Visible = true;
-            notifyIcon1.Tag = "Activity tracker";
-            notifyIcon1.Text = "Activity tracker";
+                Timer.AutoReset = true;
+                Timer.Enabled = true;
+                this.notifyIcon1.Visible = true;
+                notifyIcon1.Tag = "Activity tracker";
+                notifyIcon1.Text = "Activity tracker";
 
-            this.Hide();
-            this.ShowInTaskbar = false;
+                this.Hide();
+                this.ShowInTaskbar = false;
 
-            var menu = new System.Windows.Forms.ContextMenuStrip();
+                var menu = new System.Windows.Forms.ContextMenuStrip();
 
-            menu.Items.Add("Show", null, this.Show);
-            menu.Items.Add("Shut down", null, this.Close);
-            this.notifyIcon1.ContextMenuStrip = menu;
+                menu.Items.Add("Show", null, this.Show);
+                menu.Items.Add("Shut down", null, this.Close);
+                this.notifyIcon1.ContextMenuStrip = menu;
 
-            LastUpdate = DateTime.Now;
-
+                LastUpdate = DateTime.Now;
+            }
+            catch (Exception e)
+            {
+                File.WriteAllText(ErrorLogPath, $"Could not start app: {e}");
+            }
 
         }
 
         private void UpdateText()
         {
-            var logs = GetCurrentLog();
-            double total = 0;
-            double inactive = 0;
-
-            foreach (var entry in logs)
+            try
             {
-                if (entry.Type == ActivityType.Active.ToString())
+                var logs = GetCurrentLog();
+                double total = 0;
+                double inactive = 0;
+
+                LogEntry previous = null;
+
+                if (logs != null)
                 {
-                    total += (entry.End - entry.Start).TotalMinutes;
-                    if (inactive <= Settings.InactivityTresholdMinutes)
+
+                    foreach (var entry in logs)
                     {
-                        total += inactive;
+                        if (previous != null && (entry.Start - previous.End).TotalMinutes > 1)
+                        {
+                            inactive += (entry.Start - previous.End).TotalMinutes;
+                        }
+
+                        if (entry.Type == ActivityType.Active.ToString())
+                        {
+                            var diff = (entry.End - entry.Start).TotalMinutes;
+                            if (diff < Settings.InactivityTresholdMinutes)
+                            {
+                                total += diff;
+                                if (inactive <= Settings.InactivityTresholdMinutes)
+                                {
+                                    total += inactive;
+                                }
+
+                                inactive = 0;
+                            }
+                        }
+                        else
+                        {
+                            inactive += (entry.End - entry.Start).TotalMinutes;
+                        }
+
+                        previous = entry;
                     }
-                    inactive = 0;
+                }
+
+                var elapsedMinutes = (int) Math.Round(total, 0);
+                var inactiveMinutes = (int) Math.Round(inactive, 0);
+
+                this.label1.Text = GetHours(elapsedMinutes);
+
+                if (inactiveMinutes == 0)
+                {
+                    label2.Text = $"Status: Active";
+                }
+                else if (inactiveMinutes < Settings.InactivityTresholdMinutes)
+                {
+                    label2.Text = $"Status: Active ({inactiveMinutes} minutes inactive)";
                 }
                 else
                 {
-                    inactive += (entry.End - entry.Start).TotalMinutes;
+                    label2.Text = $"Status: Inactive ({inactiveMinutes} minutes)";
                 }
             }
-
-            var elapsedMinutes = (int)Math.Round(total, 0);
-            var inactiveMinutes = (int)Math.Round(inactive, 0);
-
-            this.label1.Text = GetHours(elapsedMinutes);
-
-            if (inactiveMinutes == 0)
+            catch (Exception ex)
             {
-                label2.Text = $"Status: Active";
-            }
-            else if(inactiveMinutes < Settings.InactivityTresholdMinutes)
-            {
-                label2.Text = $"Status: Active ({inactiveMinutes} minutes inactive)";
-            }
-            else
-            {
-                label2.Text = $"Status: Inactive ({inactiveMinutes} minutes)";
+                File.WriteAllText(ErrorLogPath, $"Error when trying to update label text: {ex}");
             }
         }
 
@@ -116,37 +149,63 @@ namespace WorkTimer
 
         private void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
         {
-
-            var position = Cursor.Position;
-
-            if (LastLocation.X != position.X || LastLocation.Y != position.Y)
+            try
             {
-                CurrentActivityType = ActivityType.Active;
+                var position = Cursor.Position;
+
+                if (LastLocation.X != position.X || LastLocation.Y != position.Y)
+                {
+                    CurrentActivityType = ActivityType.Active;
+                }
+                else
+                {
+                    CurrentActivityType = ActivityType.Inactive;
+                }
+
+                WriteActivityLog();
+                LastLocation = position;
+
+                label2.Invoke(new InvokeDelegate(UpdateText));
             }
-            else
+            catch (Exception ex)
             {
-                CurrentActivityType = ActivityType.Inactive;
+                File.WriteAllText(ErrorLogPath, $"Error on timed event: {ex}");
             }
 
-            WriteActivityLog();
-            LastLocation = position;
-
-            label2.Invoke(new InvokeDelegate(UpdateText));
         }
 
         void WriteActivityLog()
         {
-            var logs = GetCurrentLog();
-
-            logs.Add(new LogEntry
+            try
             {
-                Start = LastUpdate,
-                End = DateTime.Now,
-                Type = CurrentActivityType.ToString()
-            });
+                var logs = GetCurrentLog() ?? new List<LogEntry>();
 
-            LastUpdate = DateTime.Now;
-            UpdateLogs(logs);
+                if ((DateTime.Now - LastUpdate).TotalMinutes > Settings.InactivityTresholdMinutes)
+                {
+                    logs.Add(new LogEntry
+                    {
+                        Start = LastUpdate,
+                        End = DateTime.Now - new TimeSpan(0, 0, 1, 0),
+                        Type = ActivityType.Inactive.ToString()
+                    });
+
+                    LastUpdate = DateTime.Now - new TimeSpan(0, 0, 1, 0);
+                }
+
+                logs.Add(new LogEntry
+                {
+                    Start = LastUpdate,
+                    End = DateTime.Now,
+                    Type = CurrentActivityType.ToString()
+                });
+
+                LastUpdate = DateTime.Now;
+                UpdateLogs(logs);
+            }
+            catch (Exception e)
+            {
+                throw new Exception("Error when writing activity log", e);
+            }
         }
 
 
@@ -183,20 +242,39 @@ namespace WorkTimer
 
         List<LogEntry> GetCurrentLog()
         {
-            var path = GetCurrentLogPath();
-            if (!File.Exists(path))
+            try
             {
-                return new List<LogEntry>();
+                var path = GetCurrentLogPath();
+                if (!File.Exists(path))
+                {
+                    return new List<LogEntry>();
+                }
+                else
+                {
+                    return ReadJsonFile<List<LogEntry>>(path);
+                }
             }
-            else
+            catch (Exception e)
             {
-                return ReadJsonFile<List<LogEntry>>(path);
+                throw new Exception("Error when getting logs", e);
             }
         }
 
         void UpdateLogs(List<LogEntry> logs)
         {
-            File.WriteAllText(GetCurrentLogPath(), Newtonsoft.Json.JsonConvert.SerializeObject(logs));
+            try
+            {
+                if (!File.Exists(GetCurrentLogPath()))
+                {
+                    File.Create(GetCurrentLogPath()).Close();
+                }
+
+                File.WriteAllText(GetCurrentLogPath(), Newtonsoft.Json.JsonConvert.SerializeObject(logs));
+            }
+            catch (Exception e)
+            {
+                throw new Exception("Error when updating logs", e);
+            }
         }
 
         T ReadJsonFile<T>(string path){

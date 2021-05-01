@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace WorkTimer
 {
-    class LogEntry
+    public class LogEntry
     {
         public DateTime Start { get; set; }
         public DateTime End { get; set; }

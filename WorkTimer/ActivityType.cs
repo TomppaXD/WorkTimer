@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace WorkTimer
 {
-    enum ActivityType
+    public enum ActivityType
     {
         Active,
         Inactive

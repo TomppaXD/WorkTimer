@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace WorkTimer
 {
-    class Settings
+    public class Settings
     {
         public int InactivityTresholdMinutes { get; set; }
         public string LogPath { get; set; }
