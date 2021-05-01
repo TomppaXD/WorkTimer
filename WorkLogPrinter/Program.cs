@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using WorkTimer;
 
 namespace WorkLogPrinter
@@ -10,7 +11,7 @@ namespace WorkLogPrinter
         static void Main(string[] args)
         {
             var settings = ReadJsonFile<Settings>("settings.json");
-            var files = Directory.EnumerateFiles(settings.LogPath);
+            var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
 
             foreach (var file in files)
