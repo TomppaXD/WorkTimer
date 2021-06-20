@@ -13,10 +13,23 @@ namespace WorkLogPrinter
             var settings = ReadJsonFile<Settings>("settings.json");
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
+            Console.WriteLine("Month:");
+            var month = Int32.Parse(Console.ReadLine());
+
+            List<(DateTime date, string row)> rows = new List<(DateTime date, string row)>();
 
             foreach (var file in files)
             {
-                Console.WriteLine($"{file}: {GetWorkTime(file, settings.InactivityTresholdMinutes)}");
+                var date = file.Split('\\').Last().Split(".json").First();
+                var datetime = DateTime.Parse(date);
+                rows.Add((datetime, $"{date} ({datetime.DayOfWeek}): {GetWorkTime(file, settings.InactivityTresholdMinutes)}"));
+            }
+
+            rows = rows.Where(r => r.date.Month == month).OrderBy(r => r.date).ToList();
+
+            foreach(var row in rows)
+            {
+                Console.WriteLine(row.row);
             }
 
         }
