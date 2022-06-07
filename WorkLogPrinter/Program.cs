@@ -16,13 +16,14 @@ namespace WorkLogPrinter
             Console.WriteLine("Month:");
             var month = Int32.Parse(Console.ReadLine());
 
-            List<(DateTime date, string row)> rows = new List<(DateTime date, string row)>();
+            var rows = new List<(DateTime date, string row, int totalMinutes)>();
 
             foreach (var file in files)
             {
                 var date = file.Split('\\').Last().Split(".json").First();
                 var datetime = DateTime.Parse(date);
-                rows.Add((datetime, $"{date} ({datetime.DayOfWeek}): {GetWorkTime(file, settings.InactivityTresholdMinutes)}"));
+                var time = GetWorkTime(file, settings.InactivityTresholdMinutes);
+                rows.Add((datetime, $"{date} ({datetime.DayOfWeek}): {time.Item1}", time.Item2));
             }
 
             rows = rows.Where(r => r.date.Month == month).OrderBy(r => r.date).ToList();
@@ -31,10 +32,10 @@ namespace WorkLogPrinter
             {
                 Console.WriteLine(row.row);
             }
-
+            Console.WriteLine($"Total: {GetHours(rows.Sum(r => r.totalMinutes))}");
         }
 
-        static string GetWorkTime(string path, int inactivityTreshold)
+        static (string, int) GetWorkTime(string path, int inactivityTreshold)
         {
             var logs = ReadJsonFile<List<LogEntry>>(path);
             double total = 0;
@@ -73,7 +74,7 @@ namespace WorkLogPrinter
             var elapsedMinutes = (int)Math.Round(total, 0);
             var inactiveMinutes = (int)Math.Round(inactive, 0);
 
-            return GetHours(elapsedMinutes);
+            return (GetHours(elapsedMinutes), elapsedMinutes);
         }
 
         static string GetHours(int totalMinutes)
