@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -151,6 +152,7 @@ namespace WorkTimer
         {
             try
             {
+                ProcessInfo.GetActiveWindowTitle();
                 var position = Cursor.Position;
 
                 if (LastLocation.X != position.X || LastLocation.Y != position.Y)
@@ -237,7 +239,7 @@ namespace WorkTimer
 
         string GetCurrentLogPath()
         {
-            return Path.Combine(Settings.LogPath, $"{DateTime.Now.ToShortDateString()}.json");
+            return Path.Combine(Settings.LogPath, $"{DateTime.Now.ToString("yyyyMMdd")}.json");
         }
 
         List<LogEntry> GetCurrentLog()
@@ -264,11 +266,6 @@ namespace WorkTimer
         {
             try
             {
-                if (!File.Exists(GetCurrentLogPath()))
-                {
-                    File.Create(GetCurrentLogPath()).Close();
-                }
-
                 File.WriteAllText(GetCurrentLogPath(), Newtonsoft.Json.JsonConvert.SerializeObject(logs));
             }
             catch (Exception e)
@@ -280,10 +277,110 @@ namespace WorkTimer
         T ReadJsonFile<T>(string path){
             return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(File.ReadAllText(path));
         }
-
         private void Form1_Load(object sender, EventArgs e)
         {
             UpdateText();
+        }
+        private void button1_Click(object sender, EventArgs e)
+        {
+            int month = DateTime.Now.Month;
+            int year = DateTime.Now.Year;
+            DisplayMonthlyHours(month, year);
+        }
+        private void button2_Click(object sender, EventArgs e)
+        {
+            var month = DateTime.Now.Month - 1;
+            int year = DateTime.Now.Year;
+            if (month == 0)
+            {
+                month = 12;
+                year--;
+            }
+            DisplayMonthlyHours(month, year);
+        }
+        private void DisplayMonthlyHours(int month, int year)
+        {
+            int y = 1;
+            Historyform form = new Historyform();
+            form.Show();
+
+            var settings = ReadJsonFile<Settings>("settings.json");
+            var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
+
+            var rows = new List<(DateTime date, string row, int totalMinutes)>();
+
+            foreach (var file in files)
+            {
+                var date = file.Split('\\').Last().Replace(".json", "");
+                var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
+                var time = GetWorkTime(file, settings.InactivityTresholdMinutes);
+                rows.Add((datetime, $"{datetime.Day}.{datetime.Month}, {datetime.DayOfWeek}: {time.Item1}", time.Item2));
+            }
+
+            rows = rows.Where(r => r.date.Month == month && r.date.Year == year).OrderBy(r => r.date).ToList();
+
+            foreach (var row in rows)
+            {
+                AddLabel(y, row.row, form);
+                y++;
+            }
+            y++;
+            AddLabel(y, $"Total: {GetHours(rows.Sum(r => r.totalMinutes))}", form);
+        }
+        private void AddLabel(int y, string text, Historyform form)
+        {
+            var label = new Label();
+            label.Location = new Point(10, y * 20);
+            label.Width = 200;
+            label.Text = text;
+            label.AccessibleName = text;
+            form.Controls.Add(label);
+        }
+        (string, int) GetWorkTime(string path, int inactivityTreshold)
+        {
+            var logs = ReadJsonFile<List<LogEntry>>(path);
+            double total = 0;
+            double inactive = 0;
+            LogEntry previous = null;
+
+            foreach (var entry in logs)
+            {
+                if (previous != null && (entry.Start - previous.End).TotalMinutes > 1)
+                {
+                    inactive += (entry.Start - previous.End).TotalMinutes;
+                }
+
+                if (entry.Type == ActivityType.Active.ToString())
+                {
+                    var diff = (entry.End - entry.Start).TotalMinutes;
+                    if (diff < inactivityTreshold)
+                    {
+                        total += diff;
+                        if (inactive <= inactivityTreshold)
+                        {
+                            total += inactive;
+                        }
+
+                        inactive = 0;
+                    }
+                }
+                else
+                {
+                    inactive += (entry.End - entry.Start).TotalMinutes;
+                }
+
+                previous = entry;
+            }
+
+            var elapsedMinutes = (int)Math.Round(total, 0);
+            var inactiveMinutes = (int)Math.Round(inactive, 0);
+
+            return (GetHours(elapsedMinutes), elapsedMinutes);
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            ProcessInfo.GetActiveWindowTitle();
         }
     }
 }

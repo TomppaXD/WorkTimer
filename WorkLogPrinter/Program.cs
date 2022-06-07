@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using WorkTimer;
@@ -21,7 +22,7 @@ namespace WorkLogPrinter
             foreach (var file in files)
             {
                 var date = file.Split('\\').Last().Split(".json").First();
-                var datetime = DateTime.Parse(date);
+                var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
                 var time = GetWorkTime(file, settings.InactivityTresholdMinutes);
                 rows.Add((datetime, $"{date} ({datetime.DayOfWeek}): {time.Item1}", time.Item2));
             }
