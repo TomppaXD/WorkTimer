@@ -143,10 +143,8 @@ namespace WorkTimer
         {
             var hours = (totalMinutes / 60);
             var minutes = totalMinutes - (hours * 60);
-            return $"Workhours: {hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())  }";
+            return $"{hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())  }";
         }
-
-
 
         private void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
         {
@@ -194,11 +192,14 @@ namespace WorkTimer
                     LastUpdate = DateTime.Now - new TimeSpan(0, 0, 1, 0);
                 }
 
+                var openWindow = ProcessInfo.GetActiveWindowTitle();
                 logs.Add(new LogEntry
                 {
                     Start = LastUpdate,
                     End = DateTime.Now,
-                    Type = CurrentActivityType.ToString()
+                    Type = CurrentActivityType.ToString(),
+                    Title = openWindow.Item1,
+                    ProcessName = openWindow.Item2
                 });
 
                 LastUpdate = DateTime.Now;
@@ -209,7 +210,6 @@ namespace WorkTimer
                 throw new Exception("Error when writing activity log", e);
             }
         }
-
 
         void Close(object sender, EventArgs e)
         {
@@ -274,9 +274,11 @@ namespace WorkTimer
             }
         }
 
-        T ReadJsonFile<T>(string path){
+        public static T ReadJsonFile<T>(string path)
+        {
             return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(File.ReadAllText(path));
         }
+
         private void Form1_Load(object sender, EventArgs e)
         {
             UpdateText();
@@ -303,9 +305,32 @@ namespace WorkTimer
             int y = 1;
             Historyform form = new Historyform();
             form.Show();
+            form.AutoScroll = true;
 
             var settings = ReadJsonFile<Settings>("settings.json");
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
+
+            List<string> titles = new List<string>();
+            var moreRows = new List<(DateTime date, string title, int totalMinutes)>();
+            
+            foreach (var file in files)
+            {
+                var date = file.Split('\\').Last().Replace(".json", "");
+                var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
+                if (datetime.Month != month || datetime.Year != year)
+                {
+                    continue;
+                }
+                var logs = ReadJsonFile<List<LogEntry>>(file);
+                foreach (var entry in logs)
+                {
+                    if (titles.Contains(entry.Title) || entry.Title == null)
+                    {
+                        continue;
+                    }
+                    titles.Add(entry.Title);
+                }
+            }
 
             var rows = new List<(DateTime date, string row, int totalMinutes)>();
 
@@ -314,14 +339,35 @@ namespace WorkTimer
                 var date = file.Split('\\').Last().Replace(".json", "");
                 var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
                 var time = GetWorkTime(file, settings.InactivityTresholdMinutes);
+
+                if (time.Item2 == 0)
+                {
+                    continue;
+                }
                 rows.Add((datetime, $"{datetime.Day}.{datetime.Month}, {datetime.DayOfWeek}: {time.Item1}", time.Item2));
+                
+                foreach (var title in titles)
+                {
+                    time = GetWorkTime(file, settings.InactivityTresholdMinutes, title);
+                    moreRows.Add((datetime, $"{title} {time.Item1}", time.Item2));
+                }
             }
 
             rows = rows.Where(r => r.date.Month == month && r.date.Year == year).OrderBy(r => r.date).ToList();
+            moreRows = moreRows.OrderBy(r => r.title).ToList();
 
             foreach (var row in rows)
             {
                 AddLabel(y, row.row, form);
+                
+                foreach (var row2 in moreRows)
+                {
+                    if (row2.totalMinutes > 0 && row2.date.Day == row.date.Day)
+                    {
+                        y++;
+                        AddLabel(y, $"      ({row2.title})", form);
+                    }
+                }
                 y++;
             }
             y++;
@@ -330,21 +376,28 @@ namespace WorkTimer
         private void AddLabel(int y, string text, Historyform form)
         {
             var label = new Label();
-            label.Location = new Point(10, y * 20);
-            label.Width = 200;
+            label.Location = new Point(10, y * 25);
+            label.Width = 500;
             label.Text = text;
             label.AccessibleName = text;
             form.Controls.Add(label);
         }
-        (string, int) GetWorkTime(string path, int inactivityTreshold)
+        (string, int) GetWorkTime(string path, int inactivityTreshold, string title = null)
         {
             var logs = ReadJsonFile<List<LogEntry>>(path);
+            
+            if (title != null)
+            {
+                logs = logs.Where(l => l.Title == title).ToList();
+            }
+            
             double total = 0;
             double inactive = 0;
             LogEntry previous = null;
 
             foreach (var entry in logs)
             {
+                
                 if (previous != null && (entry.Start - previous.End).TotalMinutes > 1)
                 {
                     inactive += (entry.Start - previous.End).TotalMinutes;
@@ -380,7 +433,8 @@ namespace WorkTimer
 
         private void button3_Click(object sender, EventArgs e)
         {
-            ProcessInfo.GetActiveWindowTitle();
+            ChangeSettings settings = new ChangeSettings();
+            settings.Show();
         }
     }
 }

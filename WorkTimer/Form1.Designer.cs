@@ -41,10 +41,9 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(18, 14);
-            this.label1.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
+            this.label1.Location = new System.Drawing.Point(12, 9);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(125, 20);
+            this.label1.Size = new System.Drawing.Size(86, 13);
             this.label1.TabIndex = 0;
             this.label1.Text = "Workhours: 0:00";
             // 
@@ -57,18 +56,18 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(18, 51);
-            this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
+            this.label2.Location = new System.Drawing.Point(12, 33);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(107, 20);
+            this.label2.Size = new System.Drawing.Size(73, 13);
             this.label2.TabIndex = 1;
             this.label2.Text = "Status: Active";
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(134, 92);
+            this.button1.Location = new System.Drawing.Point(143, 2);
+            this.button1.Margin = new System.Windows.Forms.Padding(2);
             this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(134, 41);
+            this.button1.Size = new System.Drawing.Size(89, 27);
             this.button1.TabIndex = 3;
             this.button1.Text = "This month";
             this.button1.UseVisualStyleBackColor = true;
@@ -76,9 +75,10 @@
             // 
             // button2
             // 
-            this.button2.Location = new System.Drawing.Point(134, 151);
+            this.button2.Location = new System.Drawing.Point(143, 33);
+            this.button2.Margin = new System.Windows.Forms.Padding(2);
             this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(134, 47);
+            this.button2.Size = new System.Drawing.Size(89, 31);
             this.button2.TabIndex = 4;
             this.button2.Text = "Last month";
             this.button2.UseVisualStyleBackColor = true;
@@ -86,25 +86,24 @@
             // 
             // button3
             // 
-            this.button3.Location = new System.Drawing.Point(335, 51);
+            this.button3.Location = new System.Drawing.Point(9, 104);
             this.button3.Name = "button3";
             this.button3.Size = new System.Drawing.Size(75, 23);
             this.button3.TabIndex = 5;
-            this.button3.Text = "button3";
+            this.button3.Text = "Settings";
             this.button3.UseVisualStyleBackColor = true;
             this.button3.Click += new System.EventHandler(this.button3_Click);
             // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(463, 223);
+            this.ClientSize = new System.Drawing.Size(309, 145);
             this.Controls.Add(this.button3);
             this.Controls.Add(this.button2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
-            this.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.Name = "Form1";
             this.Text = "Workhours";
             this.Load += new System.EventHandler(this.Form1_Load);

@@ -19,7 +19,7 @@ namespace WorkTimer
         [DllImport("user32.dll")]
         public static extern IntPtr GetWindowThreadProcessId(IntPtr hWnd, out uint ProcessId);
 
-        public static void GetActiveWindowTitle()
+        public static (string, string) GetActiveWindowTitle()
         {
             IntPtr hwnd = GetForegroundWindow();
             uint pid;
@@ -37,6 +37,7 @@ namespace WorkTimer
             {
                 title = Buff.ToString();
             }
+            return (title, processName);
         }
     }
 }
