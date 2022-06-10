@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,6 @@ namespace WorkTimer
         public DateTime End { get; set; }
         public string Type { get; set; }
         public string Title { get; set; } = "Unknown";
-        public string ProcessName { get; set; }
+        public string ProcessName { get; set; } = "Unknown";
     }
 }

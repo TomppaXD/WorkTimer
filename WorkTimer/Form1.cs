@@ -310,9 +310,9 @@ namespace WorkTimer
             var settings = ReadJsonFile<Settings>("settings.json");
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
-            List<string> titles = new List<string>();
-            var moreRows = new List<(DateTime date, string title, int totalMinutes)>();
-            
+            //All logs of the month
+            var logs = new List<LogEntry>();
+
             foreach (var file in files)
             {
                 var date = file.Split('\\').Last().Replace(".json", "");
@@ -321,79 +321,90 @@ namespace WorkTimer
                 {
                     continue;
                 }
-                var logs = ReadJsonFile<List<LogEntry>>(file);
-                foreach (var entry in logs)
-                {
-                    if (titles.Contains(entry.Title) || entry.Title == null)
-                    {
-                        continue;
-                    }
-                    titles.Add(entry.Title);
-                }
+                var dailyLogs = ReadJsonFile<List<LogEntry>>(file);
+                logs.AddRange(dailyLogs);
             }
 
-            var rows = new List<(DateTime date, string row, int totalMinutes)>();
+            logs = logs.OrderBy(l => l.Start).ToList();
 
-            foreach (var file in files)
+            for (int i = 1; i < logs.Count; i++)
             {
-                var date = file.Split('\\').Last().Replace(".json", "");
-                var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
-                var time = GetWorkTime(file, settings.InactivityTresholdMinutes);
-
-                if (time.Item2 == 0)
+                if ((logs[i].Start - logs[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes) // <-- 10 mins
                 {
-                    continue;
-                }
-                rows.Add((datetime, $"{datetime.Day}.{datetime.Month}, {datetime.DayOfWeek}: {time.Item1}", time.Item2));
-                
-                foreach (var title in titles)
-                {
-                    time = GetWorkTime(file, settings.InactivityTresholdMinutes, title);
-                    moreRows.Add((datetime, $"{title} {time.Item1}", time.Item2));
+                    logs[i].Start = logs[i - 1].End;
                 }
             }
-
-            rows = rows.Where(r => r.date.Month == month && r.date.Year == year).OrderBy(r => r.date).ToList();
-            moreRows = moreRows.OrderBy(r => r.title).ToList();
-
-            foreach (var row in rows)
+            
+            double total = 0;
+            foreach (var date in logs.Select(l => l.Start.Date).Distinct())
             {
-                AddLabel(y, row.row, form);
+                //Kaikki lokit, jotka ovat tältä päivältä
+                var logsWithDate = logs.Where(l => l.Start.Date == date).ToList();
+
+                double dailyTotal = logsWithDate.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                total += dailyTotal;
                 
-                foreach (var row2 in moreRows)
-                {
-                    if (row2.totalMinutes > 0 && row2.date.Day == row.date.Day)
-                    {
-                        y++;
-                        AddLabel(y, $"      ({row2.title})", form);
-                    }
-                }
+                var processNames = logsWithDate.Select(l => l.ProcessName).Distinct().ToList();
+
+                // päivä, viikonpäivä, aika
+                string text = $"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}";
+                AddLabel(1, y, text, form);
                 y++;
+
+                foreach (var processName in OrderProcessNamesByMinutes(processNames, logsWithDate))
+                {
+                    var logsWithProcessName = logsWithDate.Where(l => l.ProcessName == processName);
+
+                    double processNameTotal = logsWithProcessName.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                    var titles = logsWithProcessName.Select(l => l.Title).Distinct().ToList();
+
+                    // ohjelma, aika
+                    string text2 = $"{processName} {GetHours((int)Math.Round(processNameTotal))}";
+                    AddLabel(2, y, text2, form);
+                    y++;
+
+                    foreach (var title in OrderTitlesByMinutes(processName, titles, logs))
+                    {
+                        var logsWithTitle = logsWithDate.Where(l => l.Title == title);
+
+                        double titleTotal = logsWithTitle.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                        // otsikko, aika
+                        string text3 = $"{title} {GetHours((int)Math.Round(titleTotal))}";
+                        AddLabel(3, y, text3, form);
+                        y++;
+                    }
+                }
             }
-            y++;
-            AddLabel(y, $"Total: {GetHours(rows.Sum(r => r.totalMinutes))}", form);
+            AddLabel(1, y, $"Total: {GetHours((int)Math.Round(total))}", form);
         }
-        private void AddLabel(int y, string text, Historyform form)
+
+        private List<string> OrderTitlesByMinutes(string processName, List<string> titles, List<LogEntry> logs)
+        {
+            return titles.OrderByDescending(t => logs.Where(l => l.Title == t && l.ProcessName == processName).Sum(l => (l.End - l.Start).TotalMinutes)).ToList();
+        }
+        private List<string> OrderProcessNamesByMinutes(List<string> processNames, List<LogEntry> logs)
+        {
+            return processNames.OrderByDescending(p => logs.Where(l => l.ProcessName == p).Sum(l => (l.End - l.Start).TotalMinutes)).ToList();
+        }
+        private void AddLabel(int x, int y, string text, Historyform form)
         {
             var label = new Label();
-            label.Location = new Point(10, y * 25);
-            label.Width = 500;
+            label.Location = new Point(x * 20, y * 25);
+            label.Width = 700;
             label.Text = text;
             label.AccessibleName = text;
             form.Controls.Add(label);
         }
-        (string, int) GetWorkTime(string path, int inactivityTreshold, string title = null)
+        (string, int) GetWorkTime(List<LogEntry> logs, int inactivityTreshold) 
         {
-            var logs = ReadJsonFile<List<LogEntry>>(path);
-            
-            if (title != null)
-            {
-                logs = logs.Where(l => l.Title == title).ToList();
-            }
-            
             double total = 0;
             double inactive = 0;
             LogEntry previous = null;
+
+            var timesByProcessAndTitle = new Dictionary<string, Dictionary<string, double>>();
 
             foreach (var entry in logs)
             {
@@ -409,9 +420,13 @@ namespace WorkTimer
                     if (diff < inactivityTreshold)
                     {
                         total += diff;
+
+                        timesByProcessAndTitle[entry.ProcessName][entry.Title] += diff;
+
                         if (inactive <= inactivityTreshold)
                         {
                             total += inactive;
+                            timesByProcessAndTitle[entry.ProcessName][entry.Title] += inactive;
                         }
 
                         inactive = 0;
@@ -426,7 +441,6 @@ namespace WorkTimer
             }
 
             var elapsedMinutes = (int)Math.Round(total, 0);
-            var inactiveMinutes = (int)Math.Round(inactive, 0);
 
             return (GetHours(elapsedMinutes), elapsedMinutes);
         }
@@ -435,6 +449,18 @@ namespace WorkTimer
         {
             ChangeSettings settings = new ChangeSettings();
             settings.Show();
+        }
+
+        private void monthCalendar1_DateChanged(object sender, DateRangeEventArgs e)
+        {
+            var daysFromPreviousMonday = ((int)e.Start.DayOfWeek + 6) % 7; // 0 sunnuntai, 1 maanantai jne...
+            var currentDate = e.Start.Date;
+
+            var monday = currentDate.AddDays(-daysFromPreviousMonday);
+            for (int i = 0; i < 5; i++)
+            {
+                var date = monday.AddDays(i);
+            }
         }
     }
 }
