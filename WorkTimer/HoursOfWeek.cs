@@ -10,9 +10,9 @@ using System.Windows.Forms;
 
 namespace WorkTimer
 {
-    public partial class Historyform : Form
+    public partial class HoursOfWeek : Form
     {
-        public Historyform()
+        public HoursOfWeek()
         {
             InitializeComponent();
         }

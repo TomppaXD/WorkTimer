@@ -283,29 +283,9 @@ namespace WorkTimer
         {
             UpdateText();
         }
-        private void button1_Click(object sender, EventArgs e)
-        {
-            int month = DateTime.Now.Month;
-            int year = DateTime.Now.Year;
-            DisplayMonthlyHours(month, year);
-        }
-        private void button2_Click(object sender, EventArgs e)
-        {
-            var month = DateTime.Now.Month - 1;
-            int year = DateTime.Now.Year;
-            if (month == 0)
-            {
-                month = 12;
-                year--;
-            }
-            DisplayMonthlyHours(month, year);
-        }
-        private void DisplayMonthlyHours(int month, int year)
+        private void DisplayDailyHours(DateTime day, HoursOfWeek form)
         {
             int y = 1;
-            Historyform form = new Historyform();
-            form.Show();
-            form.AutoScroll = true;
 
             var settings = ReadJsonFile<Settings>("settings.json");
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
@@ -317,7 +297,7 @@ namespace WorkTimer
             {
                 var date = file.Split('\\').Last().Replace(".json", "");
                 var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
-                if (datetime.Month != month || datetime.Year != year)
+                if (datetime.Date != day.Date)
                 {
                     continue;
                 }
@@ -336,6 +316,7 @@ namespace WorkTimer
             }
             
             double total = 0;
+            List<string> text = new List<string>();
             foreach (var date in logs.Select(l => l.Start.Date).Distinct())
             {
                 //Kaikki lokit, jotka ovat tältä päivältä
@@ -348,8 +329,8 @@ namespace WorkTimer
                 var processNames = logsWithDate.Select(l => l.ProcessName).Distinct().ToList();
 
                 // päivä, viikonpäivä, aika
-                string text = $"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}";
-                AddLabel(1, y, text, form);
+                text.Add($"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}");
+                
                 y++;
 
                 foreach (var processName in OrderProcessNamesByMinutes(processNames, logsWithDate))
@@ -361,8 +342,7 @@ namespace WorkTimer
                     var titles = logsWithProcessName.Select(l => l.Title).Distinct().ToList();
 
                     // ohjelma, aika
-                    string text2 = $"{processName} {GetHours((int)Math.Round(processNameTotal))}";
-                    AddLabel(2, y, text2, form);
+                    text.Add($"   {processName} {GetHours((int)Math.Round(processNameTotal))}");
                     y++;
 
                     foreach (var title in OrderTitlesByMinutes(processName, titles, logs))
@@ -372,15 +352,47 @@ namespace WorkTimer
                         double titleTotal = logsWithTitle.Sum(l => (l.End - l.Start).TotalMinutes);
 
                         // otsikko, aika
-                        string text3 = $"{title} {GetHours((int)Math.Round(titleTotal))}";
-                        AddLabel(3, y, text3, form);
+                        text.Add($"      {title} {GetHours((int)Math.Round(titleTotal))}");
+
                         y++;
                     }
                 }
             }
-            AddLabel(1, y, $"Total: {GetHours((int)Math.Round(total))}", form);
-        }
+            text.Add($"Total: {GetHours((int)Math.Round(total))}");
 
+            var dayOfWeek = (int)day.DayOfWeek;
+            for (int i = 0; i < text.Count; i++)
+            {
+                AddLabel(text[i], i, dayOfWeek, form);
+            }
+        }
+        private void AddLabel(string text, int y, int dayOfWeek, HoursOfWeek form)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.AutoSize = true;
+            label.Location = new Point(0, y * 16);
+            if (dayOfWeek == 1)
+            {
+                form.panel1.Controls.Add(label);
+            }
+            else if (dayOfWeek == 2)
+            {
+                form.panel2.Controls.Add(label);
+            }
+            else if (dayOfWeek == 3)
+            {
+                form.panel3.Controls.Add(label);
+            }
+            else if (dayOfWeek == 4)
+            {
+                form.panel4.Controls.Add(label);
+            }
+            else if (dayOfWeek == 5)
+            {
+                form.panel5.Controls.Add(label);
+            }
+        }
         private List<string> OrderTitlesByMinutes(string processName, List<string> titles, List<LogEntry> logs)
         {
             return titles.OrderByDescending(t => logs.Where(l => l.Title == t && l.ProcessName == processName).Sum(l => (l.End - l.Start).TotalMinutes)).ToList();
@@ -389,62 +401,6 @@ namespace WorkTimer
         {
             return processNames.OrderByDescending(p => logs.Where(l => l.ProcessName == p).Sum(l => (l.End - l.Start).TotalMinutes)).ToList();
         }
-        private void AddLabel(int x, int y, string text, Historyform form)
-        {
-            var label = new Label();
-            label.Location = new Point(x * 20, y * 25);
-            label.Width = 700;
-            label.Text = text;
-            label.AccessibleName = text;
-            form.Controls.Add(label);
-        }
-        (string, int) GetWorkTime(List<LogEntry> logs, int inactivityTreshold) 
-        {
-            double total = 0;
-            double inactive = 0;
-            LogEntry previous = null;
-
-            var timesByProcessAndTitle = new Dictionary<string, Dictionary<string, double>>();
-
-            foreach (var entry in logs)
-            {
-                
-                if (previous != null && (entry.Start - previous.End).TotalMinutes > 1)
-                {
-                    inactive += (entry.Start - previous.End).TotalMinutes;
-                }
-
-                if (entry.Type == ActivityType.Active.ToString())
-                {
-                    var diff = (entry.End - entry.Start).TotalMinutes;
-                    if (diff < inactivityTreshold)
-                    {
-                        total += diff;
-
-                        timesByProcessAndTitle[entry.ProcessName][entry.Title] += diff;
-
-                        if (inactive <= inactivityTreshold)
-                        {
-                            total += inactive;
-                            timesByProcessAndTitle[entry.ProcessName][entry.Title] += inactive;
-                        }
-
-                        inactive = 0;
-                    }
-                }
-                else
-                {
-                    inactive += (entry.End - entry.Start).TotalMinutes;
-                }
-
-                previous = entry;
-            }
-
-            var elapsedMinutes = (int)Math.Round(total, 0);
-
-            return (GetHours(elapsedMinutes), elapsedMinutes);
-        }
-
         private void button3_Click(object sender, EventArgs e)
         {
             ChangeSettings settings = new ChangeSettings();
@@ -456,10 +412,14 @@ namespace WorkTimer
             var daysFromPreviousMonday = ((int)e.Start.DayOfWeek + 6) % 7; // 0 sunnuntai, 1 maanantai jne...
             var currentDate = e.Start.Date;
 
+            HoursOfWeek form = new HoursOfWeek();
+            form.Show();
+
             var monday = currentDate.AddDays(-daysFromPreviousMonday);
             for (int i = 0; i < 5; i++)
             {
                 var date = monday.AddDays(i);
+                DisplayDailyHours(date, form);
             }
         }
     }

@@ -1,6 +1,6 @@
-﻿namespace WorkTimer
+﻿namespace WindowsFormsApp2
 {
-    partial class Historyform
+    partial class Form1
     {
         /// <summary>
         /// Required designer variable.
@@ -30,14 +30,14 @@
         {
             this.SuspendLayout();
             // 
-            // Historyform
+            // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(533, 341);
-            this.Margin = new System.Windows.Forms.Padding(2);
-            this.Name = "Historyform";
-            this.Text = "Historyform";
+            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Name = "Form1";
+            this.Text = "Form1";
+            this.Load += new System.EventHandler(this.Form1_Load);
             this.ResumeLayout(false);
 
         }
@@ -45,3 +45,4 @@
         #endregion
     }
 }
+
