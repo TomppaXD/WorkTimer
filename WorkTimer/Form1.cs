@@ -1,16 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace WorkTimer
@@ -115,8 +110,8 @@ namespace WorkTimer
                     }
                 }
 
-                var elapsedMinutes = (int) Math.Round(total, 0);
-                var inactiveMinutes = (int) Math.Round(inactive, 0);
+                var elapsedMinutes = (int)Math.Round(total, 0);
+                var inactiveMinutes = (int)Math.Round(inactive, 0);
 
                 this.label1.Text = GetHours(elapsedMinutes);
 
@@ -143,7 +138,7 @@ namespace WorkTimer
         {
             var hours = (totalMinutes / 60);
             var minutes = totalMinutes - (hours * 60);
-            return $"{hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())  }";
+            return $"{hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())}";
         }
 
         private void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
@@ -283,38 +278,73 @@ namespace WorkTimer
         {
             UpdateText();
         }
-        private void DisplayDailyHours(DateTime day, HoursOfWeek form)
+        private double DisplayDailyHours(DateTime day, HoursOfWeek form)
         {
             int y = 1;
 
             var settings = ReadJsonFile<Settings>("settings.json");
+
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
-            //All logs of the month
             var logs = new List<LogEntry>();
+            // vv
+            var logsOfMonth = new List<LogEntry>();
+            double hoursOfMonth = 0;
+            // ^^
 
             foreach (var file in files)
             {
                 var date = file.Split('\\').Last().Replace(".json", "");
                 var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
-                if (datetime.Date != day.Date)
+                if (datetime.Date == day.Date)
                 {
-                    continue;
+                    var dailyLogs = ReadJsonFile<List<LogEntry>>(file);
+                    foreach (var dailyLog in dailyLogs)
+                    {
+                        foreach (var category in settings.Categories)
+                        {
+                            if (category.ProcessName == dailyLog.ProcessName)
+                            {
+                                dailyLog.ProcessName = category.Category;
+                            }
+                        }
+                    }
+                    logs.AddRange(dailyLogs);
                 }
-                var dailyLogs = ReadJsonFile<List<LogEntry>>(file);
-                logs.AddRange(dailyLogs);
+                // vv
+                if (datetime.Month == day.Month && datetime.Year == day.Year)
+                {
+                    var monthlyLogs = ReadJsonFile<List<LogEntry>>(file);
+                    logsOfMonth.AddRange(monthlyLogs);
+                }
+                // ^^
             }
 
             logs = logs.OrderBy(l => l.Start).ToList();
 
             for (int i = 1; i < logs.Count; i++)
             {
-                if ((logs[i].Start - logs[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes) // <-- 10 mins
+                if ((logs[i].Start - logs[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
                 {
                     logs[i].Start = logs[i - 1].End;
                 }
             }
-            
+
+            // vv
+            logsOfMonth = logsOfMonth.OrderBy(l => l.Start).ToList();
+
+            for (int i = 1; i < logsOfMonth.Count; i++)
+            {
+                if ((logsOfMonth[i].Start - logsOfMonth[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
+                {
+                    logsOfMonth[i].Start = logsOfMonth[i - 1].End;
+                }
+            }
+            hoursOfMonth = logsOfMonth.Sum(l => (l.End - l.Start).TotalMinutes);
+            form.label7.Text = $"Total hours of current month {GetHours((int)Math.Round(hoursOfMonth))}";
+            // ^^
+
+
             double total = 0;
             List<string> text = new List<string>();
             foreach (var date in logs.Select(l => l.Start.Date).Distinct())
@@ -325,12 +355,12 @@ namespace WorkTimer
                 double dailyTotal = logsWithDate.Sum(l => (l.End - l.Start).TotalMinutes);
 
                 total += dailyTotal;
-                
+
                 var processNames = logsWithDate.Select(l => l.ProcessName).Distinct().ToList();
 
                 // päivä, viikonpäivä, aika
                 text.Add($"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}");
-                
+
                 y++;
 
                 foreach (var processName in OrderProcessNamesByMinutes(processNames, logsWithDate))
@@ -365,6 +395,7 @@ namespace WorkTimer
             {
                 AddLabel(text[i], i, dayOfWeek, form);
             }
+            return total;
         }
         private void AddLabel(string text, int y, int dayOfWeek, HoursOfWeek form)
         {
@@ -411,16 +442,24 @@ namespace WorkTimer
         {
             var daysFromPreviousMonday = ((int)e.Start.DayOfWeek + 6) % 7; // 0 sunnuntai, 1 maanantai jne...
             var currentDate = e.Start.Date;
-
-            HoursOfWeek form = new HoursOfWeek();
+            var startingMonth = currentDate.Month;
+            
+            HoursOfWeek form = new HoursOfWeek(); // sivuttaisessa scrollaamisessa tulee ihme värejä ja teksti latautuu hitaasti
             form.Show();
 
+            double totalOfWeek = 0;
             var monday = currentDate.AddDays(-daysFromPreviousMonday);
+
             for (int i = 0; i < 5; i++)
             {
                 var date = monday.AddDays(i);
-                DisplayDailyHours(date, form);
+                if (date.Month != startingMonth)
+                {
+                    continue;
+                }
+                totalOfWeek += DisplayDailyHours(date, form);
             }
+            form.label6.Text += GetHours((int)Math.Round(totalOfWeek)).ToString();
         }
     }
 }

@@ -50,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActivityType.cs" />
+    <Compile Include="CategorySettings.cs" />
     <Compile Include="ChangeSettings.cs">
       <SubType>Form</SubType>
     </Compile>

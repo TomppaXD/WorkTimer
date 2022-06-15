@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace WorkTimer
 {
@@ -10,5 +6,6 @@ namespace WorkTimer
     {
         public int InactivityTresholdMinutes { get; set; }
         public string LogPath { get; set; }
+        public List<CategorySettings> Categories { get; set; } = new List<CategorySettings>();
     }
 }

@@ -29,7 +29,7 @@ namespace WorkLogPrinter
 
             rows = rows.Where(r => r.date.Month == month).OrderBy(r => r.date).ToList();
 
-            foreach(var row in rows)
+            foreach (var row in rows)
             {
                 Console.WriteLine(row.row);
             }
@@ -82,7 +82,7 @@ namespace WorkLogPrinter
         {
             var hours = (totalMinutes / 60);
             var minutes = totalMinutes - (hours * 60);
-            return $"Workhours: {hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())  }";
+            return $"Workhours: {hours}:{(minutes >= 10 ? minutes.ToString() : "0" + minutes.ToString())}";
         }
 
         static T ReadJsonFile<T>(string path)
