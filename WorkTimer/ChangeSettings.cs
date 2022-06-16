@@ -9,6 +9,8 @@ namespace WorkTimer
 {
     public partial class ChangeSettings : Form
     {
+        Panel controlPanel = new Panel();
+
         private Settings setting;
         public ChangeSettings()
         {
@@ -17,6 +19,13 @@ namespace WorkTimer
             setting = Form1.ReadJsonFile<Settings>("settings.json");
             textBox1.Text = setting.LogPath;
             numericUpDown1.Text = setting.InactivityTresholdMinutes.ToString();
+
+            controlPanel.Height = 0;
+            controlPanel.AutoSize = true;
+            controlPanel.Location = new Point(10, 150);
+            controlPanel.Name = "controlPanel";
+            this.Controls.Add(controlPanel);
+
             int y = 1;
             for (int i = 0; i < setting.Categories.Count; i++)
             {
@@ -48,11 +57,11 @@ namespace WorkTimer
             add.AutoSize = true;
             add.Click += (sender, e) => addButton(sender, e);
 
-            panel.Location = new Point(10, 27 * y + 150);
+            panel.Location = new Point(0, 27 * y);
             panel.Controls.Add(processName);
             panel.Controls.Add(category);
             panel.Controls.Add(add);
-            this.Controls.Add(panel);
+            controlPanel.Controls.Add(panel);
         }
         private void createPanel(int y)
         {
@@ -60,13 +69,13 @@ namespace WorkTimer
             panel.AutoSize = true;
             panel.Height = 0;
             panel.Name = y.ToString();
-            panel.Location = new Point(10, 27 * y + 150);
+            panel.Location = new Point(0, 27 * y);
 
-            panel.Controls.Add(createLabel(13, setting.Categories[y].ProcessName));
-            panel.Controls.Add(createLabel(113, setting.Categories[y].Category));
+            panel.Controls.Add(createLabel(0, setting.Categories[y].ProcessName));
+            panel.Controls.Add(createLabel(100, setting.Categories[y].Category));
             panel.Controls.Add(createDeleteButton(y));
 
-            this.Controls.Add(panel);
+            controlPanel.Controls.Add(panel);
         }
         private Label createLabel(int x, string text)
         {
@@ -80,7 +89,7 @@ namespace WorkTimer
         private Button createDeleteButton(int y)
         {
             Button delete = new Button();
-            delete.Location = new Point(200, 0);
+            delete.Location = new Point(190, 0);
             delete.Text = "Delete";
             delete.AutoSize = true;
             delete.Click += new EventHandler(deleteButtonClick);
@@ -93,18 +102,19 @@ namespace WorkTimer
 
             setting.Categories.RemoveAt(y);
             updateSettings();
-            this.Controls.RemoveByKey(y.ToString());
+            controlPanel.Controls.RemoveByKey(y.ToString());
 
-            foreach (Control control in this.Controls)
+            foreach (Control control in controlPanel.Controls)
             {
+
                 if (control is Panel && int.Parse(control.Name) > y)
                 {
-                    control.Location = new Point(10, control.Location.Y - 27);
+                    control.Location = new Point(0, control.Location.Y - 27);
                     control.Name = (int.Parse(control.Name) - 1).ToString();
                 }
             }
         }
-        private void addButton(object sender, EventArgs e) // uusien kategorioiden luominen, kun luominen menee sivun yli, ei toimi
+        private void addButton(object sender, EventArgs e)
         {
             int y = int.Parse(((Button)sender).Parent.Name);
             string processName = "";
@@ -133,12 +143,17 @@ namespace WorkTimer
 
 
             ((Button)sender).Parent.Name = (y + 1).ToString();
-            ((Button)sender).Parent.Location = new Point(10, ((Button)sender).Parent.Location.Y + 27);
+            ((Button)sender).Parent.Location = new Point(0, ((Button)sender).Parent.Location.Y + 27);
 
             createPanel(setting.Categories.Count - 1);
         }
         private void button1_Click(object sender, EventArgs e)
         {
+            if (!Directory.Exists(textBox1.Text))
+            {
+                textBox1.Text = "Folder does not exist.";
+                return;
+            }
             setting.LogPath = textBox1.Text;
             setting.InactivityTresholdMinutes = (int)numericUpDown1.Value;
             updateSettings();

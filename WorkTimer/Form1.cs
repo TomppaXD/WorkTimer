@@ -21,9 +21,7 @@ namespace WorkTimer
         ActivityType CurrentActivityType { get; set; } = ActivityType.Active;
 
         Settings Settings { get; set; }
-
-        private string ErrorLogPath => Path.Combine($"{Settings.LogPath}", $"error_{DateTime.Now.Ticks}.txt");
-
+        
         public delegate void UpdateTextCallback(string text);
 
         public delegate void InvokeDelegate();
@@ -57,12 +55,12 @@ namespace WorkTimer
                 menu.Items.Add("Show", null, this.Show);
                 menu.Items.Add("Shut down", null, this.Close);
                 this.notifyIcon1.ContextMenuStrip = menu;
-
+                
                 LastUpdate = DateTime.Now;
             }
             catch (Exception e)
             {
-                File.WriteAllText(ErrorLogPath, $"Could not start app: {e}");
+                MessageBox.Show($"Could not start app: {e}", e.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
         }
@@ -130,7 +128,7 @@ namespace WorkTimer
             }
             catch (Exception ex)
             {
-                File.WriteAllText(ErrorLogPath, $"Error when trying to update label text: {ex}");
+                MessageBox.Show($"Error when trying to update label text: {ex}", ex.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -164,7 +162,7 @@ namespace WorkTimer
             }
             catch (Exception ex)
             {
-                File.WriteAllText(ErrorLogPath, $"Error on timed event: {ex}");
+                MessageBox.Show($"Error on timed event: {ex}", ex.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
         }
@@ -202,7 +200,7 @@ namespace WorkTimer
             }
             catch (Exception e)
             {
-                throw new Exception("Error when writing activity log", e);
+                MessageBox.Show($"Error when writing activity log: {e}", e.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -265,7 +263,7 @@ namespace WorkTimer
             }
             catch (Exception e)
             {
-                throw new Exception("Error when updating logs", e);
+                MessageBox.Show($"Error when updating logs: {e}", e.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -283,7 +281,7 @@ namespace WorkTimer
             int y = 1;
 
             var settings = ReadJsonFile<Settings>("settings.json");
-
+            
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
             var logs = new List<LogEntry>();
@@ -321,6 +319,58 @@ namespace WorkTimer
             }
 
             logs = logs.OrderBy(l => l.Start).ToList();
+
+
+            // vv
+
+            int indexOfLast = 0;
+            for (int i = 0; i < logs.Count; i++)
+            {
+                var logsWithinTreshold = new List<LogEntry>();
+                logsWithinTreshold.Add(logs[i]);
+
+                var logsWithDateAndProcessName = logs.Where(l => l.ProcessName == logs[i].ProcessName && l.Start >= logs[i].Start).ToList();
+                for (int j = 1; j < logsWithDateAndProcessName.Count; j++)
+                {
+                    if ((logsWithDateAndProcessName[j].Start - logsWithDateAndProcessName[j - 1].End).TotalMinutes < 10)
+                    {
+                        logsWithinTreshold.Add(logs[j]);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                double minutes = logsWithinTreshold.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                indexOfLast = logs.IndexOf(logsWithinTreshold[logsWithinTreshold.Count - 1]);
+
+                var gap = new List<LogEntry>();
+                for (int j = i + 1; j < indexOfLast; j++)
+                {
+                    if (logs[j].ProcessName == logs[i].ProcessName)
+                    {
+                        continue;
+                    }
+                    foreach (var log in logs.Skip(j))
+                    {
+                        if (log.ProcessName == logs[i].ProcessName)
+                        {
+                            break;
+                        }
+                        gap.Add(log);
+                    }
+                    if (gap.Sum(l => (l.End - l.Start).TotalMinutes) <= minutes * 0.1)
+                    {
+                        foreach (var log in gap)
+                        {
+                            log.ProcessName = logs[i].ProcessName;
+                        }
+                    }
+                }
+            }
+            // ^^
 
             for (int i = 1; i < logs.Count; i++)
             {
@@ -444,20 +494,26 @@ namespace WorkTimer
             var currentDate = e.Start.Date;
             var startingMonth = currentDate.Month;
             
-            HoursOfWeek form = new HoursOfWeek(); // sivuttaisessa scrollaamisessa tulee ihme värejä ja teksti latautuu hitaasti
+            HoursOfWeek form = new HoursOfWeek();
             form.Show();
 
             double totalOfWeek = 0;
             var monday = currentDate.AddDays(-daysFromPreviousMonday);
-
-            for (int i = 0; i < 5; i++)
+            try
             {
-                var date = monday.AddDays(i);
-                if (date.Month != startingMonth)
+                for (int i = 0; i < 5; i++)
                 {
-                    continue;
+                    var date = monday.AddDays(i);
+                    if (date.Month != startingMonth)
+                    {
+                        continue;
+                    }
+                    totalOfWeek += DisplayDailyHours(date, form);
                 }
-                totalOfWeek += DisplayDailyHours(date, form);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error when trying to display hours: {ex}", ex.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             form.label6.Text += GetHours((int)Math.Round(totalOfWeek)).ToString();
         }
