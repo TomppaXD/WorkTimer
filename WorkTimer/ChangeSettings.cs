@@ -9,7 +9,7 @@ namespace WorkTimer
 {
     public partial class ChangeSettings : Form
     {
-        Panel controlPanel = new Panel();
+        Panel panels = new Panel();
 
         private Settings setting;
         public ChangeSettings()
@@ -20,11 +20,10 @@ namespace WorkTimer
             textBox1.Text = setting.LogPath;
             numericUpDown1.Text = setting.InactivityTresholdMinutes.ToString();
 
-            controlPanel.Height = 0;
-            controlPanel.AutoSize = true;
-            controlPanel.Location = new Point(10, 150);
-            controlPanel.Name = "controlPanel";
-            this.Controls.Add(controlPanel);
+            panels.Height = 0;
+            panels.AutoSize = true;
+            panels.Location = new Point(10, 150);
+            this.Controls.Add(panels);
 
             int y = 1;
             for (int i = 0; i < setting.Categories.Count; i++)
@@ -32,7 +31,10 @@ namespace WorkTimer
                 createPanel(i);
                 y++;
             }
-
+            createRowAddingPanel(y);
+        }
+        private void createRowAddingPanel(int y)
+        {
             Panel panel = new Panel();
             panel.Height = 0;
             panel.AutoSize = true;
@@ -47,13 +49,13 @@ namespace WorkTimer
             TextBox category = new TextBox();
             category.Width = 100;
             category.Height = 17;
-            category.Location = new Point(100, 2);
+            category.Location = new Point(103, 2);
             category.Name = "category";
 
             Button add = new Button();
             add.Text = "Add";
             add.Name = "add";
-            add.Location = new Point(200, 0);
+            add.Location = new Point(210, 0);
             add.AutoSize = true;
             add.Click += (sender, e) => addButton(sender, e);
 
@@ -61,7 +63,7 @@ namespace WorkTimer
             panel.Controls.Add(processName);
             panel.Controls.Add(category);
             panel.Controls.Add(add);
-            controlPanel.Controls.Add(panel);
+            panels.Controls.Add(panel);
         }
         private void createPanel(int y)
         {
@@ -75,7 +77,7 @@ namespace WorkTimer
             panel.Controls.Add(createLabel(100, setting.Categories[y].Category));
             panel.Controls.Add(createDeleteButton(y));
 
-            controlPanel.Controls.Add(panel);
+            panels.Controls.Add(panel);
         }
         private Label createLabel(int x, string text)
         {
@@ -89,7 +91,7 @@ namespace WorkTimer
         private Button createDeleteButton(int y)
         {
             Button delete = new Button();
-            delete.Location = new Point(190, 0);
+            delete.Location = new Point(210, 0);
             delete.Text = "Delete";
             delete.AutoSize = true;
             delete.Click += new EventHandler(deleteButtonClick);
@@ -102,11 +104,10 @@ namespace WorkTimer
 
             setting.Categories.RemoveAt(y);
             updateSettings();
-            controlPanel.Controls.RemoveByKey(y.ToString());
+            panels.Controls.RemoveByKey(y.ToString());
 
-            foreach (Control control in controlPanel.Controls)
+            foreach (Control control in panels.Controls)
             {
-
                 if (control is Panel && int.Parse(control.Name) > y)
                 {
                     control.Location = new Point(0, control.Location.Y - 27);
@@ -116,10 +117,11 @@ namespace WorkTimer
         }
         private void addButton(object sender, EventArgs e)
         {
-            int y = int.Parse(((Button)sender).Parent.Name);
+            var rowAddingPanel = ((Button)sender).Parent;
+            int y = int.Parse(rowAddingPanel.Name);
             string processName = "";
             string category = "";
-            foreach (Control c in ((Button)sender).Parent.Controls)
+            foreach (Control c in rowAddingPanel.Controls)
             {
                 if (c.Name == "processName")
                 {
@@ -141,9 +143,8 @@ namespace WorkTimer
             );
             updateSettings();
 
-
-            ((Button)sender).Parent.Name = (y + 1).ToString();
-            ((Button)sender).Parent.Location = new Point(0, ((Button)sender).Parent.Location.Y + 27);
+            rowAddingPanel.Name = (y + 1).ToString();
+            rowAddingPanel.Location = new Point(0, ((Button)sender).Parent.Location.Y + 27);
 
             createPanel(setting.Categories.Count - 1);
         }

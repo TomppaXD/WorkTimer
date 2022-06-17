@@ -146,9 +146,9 @@
             this.label7.AutoSize = true;
             this.label7.Location = new System.Drawing.Point(1553, 40);
             this.label7.Name = "label7";
-            this.label7.Size = new System.Drawing.Size(143, 13);
+            this.label7.Size = new System.Drawing.Size(126, 13);
             this.label7.TabIndex = 15;
-            this.label7.Text = "Total hours of current month ";
+            this.label7.Text = "Total hours of this month ";
             // 
             // HoursOfWeek
             // 

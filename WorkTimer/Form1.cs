@@ -10,7 +10,6 @@ using System.Windows.Forms;
 
 namespace WorkTimer
 {
-
     public partial class Form1 : Form
     {
         private System.Timers.Timer Timer { get; set; }
@@ -285,10 +284,9 @@ namespace WorkTimer
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
             var logs = new List<LogEntry>();
-            // vv
+
             var logsOfMonth = new List<LogEntry>();
             double hoursOfMonth = 0;
-            // ^^
 
             foreach (var file in files)
             {
@@ -297,6 +295,11 @@ namespace WorkTimer
                 if (datetime.Date == day.Date)
                 {
                     var dailyLogs = ReadJsonFile<List<LogEntry>>(file);
+                    if (dailyLogs == null)
+                    {
+                        continue;
+                    }
+
                     foreach (var dailyLog in dailyLogs)
                     {
                         foreach (var category in settings.Categories)
@@ -309,19 +312,20 @@ namespace WorkTimer
                     }
                     logs.AddRange(dailyLogs);
                 }
-                // vv
+                
                 if (datetime.Month == day.Month && datetime.Year == day.Year)
                 {
                     var monthlyLogs = ReadJsonFile<List<LogEntry>>(file);
+                    if (monthlyLogs == null)
+                    {
+                        continue;
+                    }
                     logsOfMonth.AddRange(monthlyLogs);
                 }
-                // ^^
+                
             }
 
             logs = logs.OrderBy(l => l.Start).ToList();
-
-
-            // vv
 
             int indexOfLast = 0;
             for (int i = 0; i < logs.Count; i++)
@@ -343,7 +347,6 @@ namespace WorkTimer
                 }
 
                 double minutes = logsWithinTreshold.Sum(l => (l.End - l.Start).TotalMinutes);
-
                 indexOfLast = logs.IndexOf(logsWithinTreshold[logsWithinTreshold.Count - 1]);
 
                 var gap = new List<LogEntry>();
@@ -370,8 +373,8 @@ namespace WorkTimer
                     }
                 }
             }
-            // ^^
 
+            // filling the gaps between logs
             for (int i = 1; i < logs.Count; i++)
             {
                 if ((logs[i].Start - logs[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
@@ -380,7 +383,7 @@ namespace WorkTimer
                 }
             }
 
-            // vv
+
             logsOfMonth = logsOfMonth.OrderBy(l => l.Start).ToList();
 
             for (int i = 1; i < logsOfMonth.Count; i++)
@@ -391,8 +394,7 @@ namespace WorkTimer
                 }
             }
             hoursOfMonth = logsOfMonth.Sum(l => (l.End - l.Start).TotalMinutes);
-            form.label7.Text = $"Total hours of current month {GetHours((int)Math.Round(hoursOfMonth))}";
-            // ^^
+            form.label7.Text = $"Total hours of this month {GetHours((int)Math.Round(hoursOfMonth))}";
 
 
             double total = 0;
@@ -499,6 +501,7 @@ namespace WorkTimer
 
             double totalOfWeek = 0;
             var monday = currentDate.AddDays(-daysFromPreviousMonday);
+            
             try
             {
                 for (int i = 0; i < 5; i++)
