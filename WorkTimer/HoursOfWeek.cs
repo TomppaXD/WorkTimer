@@ -7,7 +7,6 @@ namespace WorkTimer
         public HoursOfWeek()
         {
             InitializeComponent();
-
         }
     }
 }

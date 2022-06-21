@@ -25,6 +25,8 @@ namespace WorkTimer
 
         public delegate void InvokeDelegate();
 
+        List<(string processName, Color color)> alreadyPainted = new List<(string processName, Color color)>();
+
         //TODO: Write to a file, generate history
         /* Inactive minutes:
          * If user is inactive, start collecting inactive minutes
@@ -283,15 +285,90 @@ namespace WorkTimer
             
             var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
 
-            var logs = new List<LogEntry>();
 
-            var logsOfMonth = new List<LogEntry>();
+            var logs = GetLogsByDay(files, day, settings);
+            logs = logs.OrderBy(l => l.Start).ToList();
+
+            // filling the gaps between logs
+            logs = FillingTheGaps(logs, settings);
+
+
+            var logsOfMonth = GetLogsByMonth(files, day, settings);
+            logsOfMonth = logsOfMonth.OrderBy(l => l.Start).ToList();
+
             double hoursOfMonth = 0;
 
+            for (int i = 1; i < logsOfMonth.Count; i++)
+            {
+                if ((logsOfMonth[i].Start - logsOfMonth[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
+                {
+                    logsOfMonth[i].Start = logsOfMonth[i - 1].End;
+                }
+            }
+            hoursOfMonth = logsOfMonth.Sum(l => (l.End - l.Start).TotalMinutes);
+            form.label7.Text = $"Total hours of this month {GetHours((int)Math.Round(hoursOfMonth))}";
+
+
+            double total = 0;
+
+            var text = new List<(string, string)>();
+
+            foreach (var date in logs.Select(l => l.Start.Date).Distinct())
+            {
+                //Kaikki lokit, jotka ovat tältä päivältä
+                var logsWithDate = logs.Where(l => l.Start.Date == date).ToList();
+
+                double dailyTotal = logsWithDate.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                total += dailyTotal;
+
+                var processNames = logsWithDate.Select(l => l.ProcessName).Distinct().ToList();
+
+                // päivä, viikonpäivä, aika
+                text.Add(($"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}", "b"));
+
+                y++;
+
+                foreach (var processName in OrderProcessNamesByMinutes(processNames, logsWithDate))
+                {
+                    var logsWithProcessName = logsWithDate.Where(l => l.ProcessName == processName);
+
+                    double processNameTotal = logsWithProcessName.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                    var titles = logsWithProcessName.Select(l => l.Title).Distinct().ToList();
+
+                    // ohjelma, aika
+                    text.Add(($"   {processName} {GetHours((int)Math.Round(processNameTotal))}", "b"));
+                    y++;
+
+                    foreach (var title in OrderTitlesByMinutes(processName, titles, logs))
+                    {
+                        var logsWithTitle = logsWithDate.Where(l => l.Title == title);
+
+                        double titleTotal = logsWithTitle.Sum(l => (l.End - l.Start).TotalMinutes);
+
+                        // otsikko, aika
+                        text.Add(($"      {title} {GetHours((int)Math.Round(titleTotal))}", ""));
+
+                        y++;
+                    }
+                }
+            }
+            text.Add(($"Total: {GetHours((int)Math.Round(total))}", "b"));
+
+            var dayOfWeek = (int)day.DayOfWeek;
+            for (int i = 0; i < text.Count; i++)
+            {
+                AddLabel(text[i].Item1, i, dayOfWeek, form, text[i].Item2);
+            }
+            return total;
+        }
+        private List<LogEntry> GetLogsByDay(IEnumerable<string> files, DateTime day, Settings settings)
+        {
+            var logs = new List<LogEntry>();
             foreach (var file in files)
             {
-                var date = file.Split('\\').Last().Replace(".json", "");
-                var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
+                var datetime = GetDateTime(file);
                 if (datetime.Date == day.Date)
                 {
                     var dailyLogs = ReadJsonFile<List<LogEntry>>(file);
@@ -312,7 +389,15 @@ namespace WorkTimer
                     }
                     logs.AddRange(dailyLogs);
                 }
-                
+            }
+            return logs;
+        }
+        private List<LogEntry> GetLogsByMonth(IEnumerable<string> files, DateTime day, Settings settings)
+        {
+            var logsOfMonth = new List<LogEntry>();
+            foreach (var file in files)
+            {
+                var datetime = GetDateTime(file);
                 if (datetime.Month == day.Month && datetime.Year == day.Year)
                 {
                     var monthlyLogs = ReadJsonFile<List<LogEntry>>(file);
@@ -322,11 +407,18 @@ namespace WorkTimer
                     }
                     logsOfMonth.AddRange(monthlyLogs);
                 }
-                
             }
+            return logsOfMonth;
+        }
+        private DateTime GetDateTime(string file)
+        {
+            var date = file.Split('\\').Last().Replace(".json", "");
+            var datetime = DateTime.ParseExact(date, "yyyyMMdd", CultureInfo.InvariantCulture);
 
-            logs = logs.OrderBy(l => l.Start).ToList();
-
+            return datetime;
+        }
+        private List<LogEntry> FillingTheGaps(List<LogEntry> logs, Settings settings)
+        {
             int indexOfLast = 0;
             for (int i = 0; i < logs.Count; i++)
             {
@@ -374,7 +466,6 @@ namespace WorkTimer
                 }
             }
 
-            // filling the gaps between logs
             for (int i = 1; i < logs.Count; i++)
             {
                 if ((logs[i].Start - logs[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
@@ -382,76 +473,15 @@ namespace WorkTimer
                     logs[i].Start = logs[i - 1].End;
                 }
             }
-
-
-            logsOfMonth = logsOfMonth.OrderBy(l => l.Start).ToList();
-
-            for (int i = 1; i < logsOfMonth.Count; i++)
-            {
-                if ((logsOfMonth[i].Start - logsOfMonth[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
-                {
-                    logsOfMonth[i].Start = logsOfMonth[i - 1].End;
-                }
-            }
-            hoursOfMonth = logsOfMonth.Sum(l => (l.End - l.Start).TotalMinutes);
-            form.label7.Text = $"Total hours of this month {GetHours((int)Math.Round(hoursOfMonth))}";
-
-
-            double total = 0;
-            List<string> text = new List<string>();
-            foreach (var date in logs.Select(l => l.Start.Date).Distinct())
-            {
-                //Kaikki lokit, jotka ovat tältä päivältä
-                var logsWithDate = logs.Where(l => l.Start.Date == date).ToList();
-
-                double dailyTotal = logsWithDate.Sum(l => (l.End - l.Start).TotalMinutes);
-
-                total += dailyTotal;
-
-                var processNames = logsWithDate.Select(l => l.ProcessName).Distinct().ToList();
-
-                // päivä, viikonpäivä, aika
-                text.Add($"{date.Day}.{date.Month}, {date.DayOfWeek}: {GetHours((int)Math.Round(dailyTotal))}");
-
-                y++;
-
-                foreach (var processName in OrderProcessNamesByMinutes(processNames, logsWithDate))
-                {
-                    var logsWithProcessName = logsWithDate.Where(l => l.ProcessName == processName);
-
-                    double processNameTotal = logsWithProcessName.Sum(l => (l.End - l.Start).TotalMinutes);
-
-                    var titles = logsWithProcessName.Select(l => l.Title).Distinct().ToList();
-
-                    // ohjelma, aika
-                    text.Add($"   {processName} {GetHours((int)Math.Round(processNameTotal))}");
-                    y++;
-
-                    foreach (var title in OrderTitlesByMinutes(processName, titles, logs))
-                    {
-                        var logsWithTitle = logsWithDate.Where(l => l.Title == title);
-
-                        double titleTotal = logsWithTitle.Sum(l => (l.End - l.Start).TotalMinutes);
-
-                        // otsikko, aika
-                        text.Add($"      {title} {GetHours((int)Math.Round(titleTotal))}");
-
-                        y++;
-                    }
-                }
-            }
-            text.Add($"Total: {GetHours((int)Math.Round(total))}");
-
-            var dayOfWeek = (int)day.DayOfWeek;
-            for (int i = 0; i < text.Count; i++)
-            {
-                AddLabel(text[i], i, dayOfWeek, form);
-            }
-            return total;
+            return logs;
         }
-        private void AddLabel(string text, int y, int dayOfWeek, HoursOfWeek form)
+        private void AddLabel(string text, int y, int dayOfWeek, HoursOfWeek form, string fontStyle)
         {
             Label label = new Label();
+            if (fontStyle == "b")
+            {
+                label.Font = new Font(label.Font, FontStyle.Bold);
+            }
             label.Text = text;
             label.AutoSize = true;
             label.Location = new Point(0, y * 16);
@@ -489,12 +519,10 @@ namespace WorkTimer
             ChangeSettings settings = new ChangeSettings();
             settings.Show();
         }
-
         private void monthCalendar1_DateChanged(object sender, DateRangeEventArgs e)
         {
             var daysFromPreviousMonday = ((int)e.Start.DayOfWeek + 6) % 7; // 0 sunnuntai, 1 maanantai jne...
             var currentDate = e.Start.Date;
-            var startingMonth = currentDate.Month;
             
             HoursOfWeek form = new HoursOfWeek();
             form.Show();
@@ -507,9 +535,30 @@ namespace WorkTimer
                 for (int i = 0; i < 5; i++)
                 {
                     var date = monday.AddDays(i);
-                    if (date.Month != startingMonth)
+                    if (date.Month != currentDate.Month || date.Year != currentDate.Year)
                     {
                         continue;
+                    }
+
+                    if ((int)date.DayOfWeek == 1)
+                    {
+                        form.button1.Click += new EventHandler((sender2, e2) => buttonClick(sender2, e2, date));
+                    }
+                    else if ((int)date.DayOfWeek == 2)
+                    {
+                        form.button2.Click += new EventHandler((sender2, e2) => buttonClick(sender2, e2, date));
+                    }
+                    else if ((int)date.DayOfWeek == 3)
+                    {
+                        form.button3.Click += new EventHandler((sender2, e2) => buttonClick(sender2, e2, date));
+                    }
+                    else if ((int)date.DayOfWeek == 4)
+                    {
+                        form.button4.Click += new EventHandler((sender2, e2) => buttonClick(sender2, e2, date));
+                    }
+                    else if ((int)date.DayOfWeek == 5)
+                    {
+                        form.button5.Click += new EventHandler((sender2, e2) => buttonClick(sender2, e2, date));
                     }
                     totalOfWeek += DisplayDailyHours(date, form);
                 }
@@ -519,6 +568,145 @@ namespace WorkTimer
                 MessageBox.Show($"Error when trying to display hours: {ex}", ex.ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             form.label6.Text += GetHours((int)Math.Round(totalOfWeek)).ToString();
+        }
+        private void buttonClick(object sender, EventArgs e, DateTime date)
+        {
+            var settings = ReadJsonFile<Settings>("settings.json");
+
+            var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
+
+            var logs = GetLogsByDay(files, date, settings);
+            logs = logs.OrderBy(l => l.Start).ToList();
+            logs = FillingTheGaps(logs, settings);
+
+            HoursOfDay form = new HoursOfDay();
+            form.Show();
+            if (logs.Count == 0)
+            {
+                return;
+            }
+
+            string previousProcessName = "";
+
+            var stuff = new List<(string processName, DateTime start, DateTime end)>();
+
+            DateTime start = DateTime.Now;
+            DateTime end = DateTime.Now;
+
+            string startMinutes = "";
+            string endMinutes = "";
+
+            for (int i = 0; i < logs.Count; i++)
+            {
+                end = logs[i].End;
+                if (previousProcessName == "")
+                {
+                    start = logs[i].Start;
+                }
+                else if (previousProcessName != logs[i].ProcessName || (logs[i].Start - logs[i - 1].End).TotalMinutes > 10)
+                {
+                    end = logs[i - 1].End;
+                    stuff.Add((previousProcessName, start, end));
+                    start = logs[i].Start;
+                }
+                previousProcessName = logs[i].ProcessName;
+            }
+            end = logs[logs.Count - 1].End;
+
+            stuff.Add((previousProcessName, start, end));
+            form.Text = $"{date.Day}.{date.Month} {date.DayOfWeek}";
+
+            double timeMultiplier = 0;
+            int previousY = 0;
+            int defaultGap = 40;
+
+            Panel panel = new Panel();
+            panel.Location = new Point(20, 0);
+
+            panel.AutoSize = true;
+            panel.Width = 200;
+            form.Controls.Add(panel);
+
+            form.AutoScroll = true;
+
+            string previousEndTime = "";
+            Random random = new Random();
+
+            for (int i = 0; i < stuff.Count; i++)
+            {
+                startMinutes = stuff[i].start.Minute >= 10 ? stuff[i].start.Minute.ToString() : "0" + stuff[i].start.Minute.ToString();
+                endMinutes = stuff[i].end.Minute >= 10 ? stuff[i].end.Minute.ToString() : "0" + stuff[i].end.Minute.ToString();
+
+                if (previousEndTime != $"{stuff[i].start.Hour}:{startMinutes}")
+                {
+                    previousY += 20;
+
+                    Label startLabel = new Label();
+                    startLabel.AutoSize = true;
+                    startLabel.Location = new Point(10, previousY);
+                    startLabel.Text = $"{stuff[i].start.Hour}:{startMinutes}";
+
+                    panel.Controls.Add(startLabel);
+                }
+                previousEndTime = $"{stuff[i].end.Hour}:{endMinutes}";
+                Point startPoint = new Point(5, previousY + 8);
+
+                Label processNameLabel = new Label();
+                processNameLabel.Text = stuff[i].processName;
+                processNameLabel.AutoSize = true;
+
+                Label endLabel = new Label();
+                endLabel.Text = $"{stuff[i].end.Hour}:{endMinutes}";
+                endLabel.AutoSize = true;
+                
+                if ((stuff[i].end - stuff[i].start).TotalMinutes <= 5)
+                {
+                    endLabel.Location = new Point(10, previousY + defaultGap);
+                    processNameLabel.Location = new Point(20, defaultGap / 2 + previousY);
+                    previousY += defaultGap;
+                }
+                else
+                {
+                    int totalMinutes = (int)(stuff[i].end - stuff[i].start).TotalMinutes;
+                    timeMultiplier = (2 * Math.Sqrt(840 * totalMinutes - 4175) + 270) / 7;
+                    endLabel.Location = new Point(10, previousY + (int)timeMultiplier);
+                    processNameLabel.Location = new Point(20, (int)timeMultiplier / 2 + previousY);
+                    previousY += (int)timeMultiplier;
+                }
+                panel.Controls.Add(endLabel);
+                panel.Controls.Add(processNameLabel);
+
+                Point endPoint = new Point(5, previousY + 8);
+                string processName = stuff[i].processName;
+
+                Color c = Color.FromArgb(random.Next(20, 236), random.Next(20, 236), random.Next(20, 236));
+                panel.Paint += new PaintEventHandler((sender2, e2) => PaintLine(sender2, e2, startPoint, endPoint, processName, c));
+            }
+            Label footer = new Label();
+            footer.Location = new Point(10, previousY + 16);
+            panel.Controls.Add(footer);
+        }
+        private void PaintLine(object sender, PaintEventArgs e, Point start, Point end, string processName, Color c)
+        {
+            Graphics g = e.Graphics;
+            bool found = false;
+
+            foreach (var item in alreadyPainted)
+            {
+                if (item.processName == processName)
+                {
+                    c = item.color;
+                    found = true;
+                    Pen pen = new Pen(c, 5);
+                    g.DrawLine(pen, start.X, start.Y, end.X, end.Y);
+                    pen.Dispose();
+                    return;
+                }
+            }
+            if (!found)
+            {
+                alreadyPainted.Add((processName, c));
+            }
         }
     }
 }
