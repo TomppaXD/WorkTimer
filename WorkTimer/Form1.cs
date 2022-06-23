@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -705,8 +706,25 @@ namespace WorkTimer
             }
             if (!found)
             {
+                foreach (var category in Settings.Categories)
+                {
+                    if (category.Category == processName && category.Color.IsEmpty)
+                    {
+                        category.Color = c;
+                        updateSettings();
+                    }
+                    else if (category.Category == processName && !category.Color.IsEmpty)
+                    {
+                        c = category.Color;
+                    }
+                }
                 alreadyPainted.Add((processName, c));
             }
+        }
+        private void updateSettings()
+        {
+            string content = JsonConvert.SerializeObject(Settings);
+            File.WriteAllText("settings.json", content);
         }
     }
 }

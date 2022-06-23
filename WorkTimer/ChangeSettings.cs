@@ -11,6 +11,8 @@ namespace WorkTimer
     {
         Panel panels = new Panel();
 
+        Panel colorPanels = new Panel();
+
         private Settings setting;
         public ChangeSettings()
         {
@@ -32,6 +34,83 @@ namespace WorkTimer
                 y++;
             }
             createRowAddingPanel(y);
+
+            colorPanels.AutoSize = true;
+            colorPanels.Location = new Point(330, 15);
+            this.Controls.Add(colorPanels);
+
+            createColorPanels();           
+        }
+        private void createColorPanels()
+        {
+            List<(string, Color)> categories = new List<(string, Color)>();
+
+            foreach (var category in setting.Categories)
+            {
+                if (!categories.Contains((category.Category, category.Color)))
+                {
+                    categories.Add((category.Category, category.Color));
+                }
+            }
+            for (int i = 0; i < categories.Count; i++)
+            {
+                colorPanels.Controls.Add(createColorPanel(i, categories[i]));
+            }
+        }
+        private Panel createColorPanel(int y, (string, Color) category)
+        {
+            Panel panel = new Panel();
+            panel.Height = 0;
+            panel.AutoSize = true;
+            panel.Name = y.ToString();
+            panel.Location = new Point(0, y * 27);
+
+            panel.Controls.Add(createCategoryText(category.Item1));
+            panel.Controls.Add(createColorButton(category.Item2));
+
+            return panel;
+        }
+        private Label createCategoryText(string text)
+        {
+            Label l = new Label();
+            l.AutoSize = true;
+            l.Location = new Point(0, 5);
+            l.Text = text;
+            l.Name = text;
+            return l;
+        }
+        private Button createColorButton(Color color)
+        {
+            Button b = new Button();
+            b.BackColor = color;
+            b.ForeColor = color;
+            b.Location = new Point(100, 0);
+            b.Size = new Size(25, 25);
+            b.Click += new EventHandler(colorDialog);
+            return b;
+        }
+        private void colorDialog(object sender, EventArgs e)
+        {
+            ColorDialog colorDialog = new ColorDialog();
+            if (colorDialog.ShowDialog() == DialogResult.OK)
+            {
+                ((Button)sender).BackColor = colorDialog.Color;
+                foreach (Control c in ((Button)sender).Parent.Controls)
+                {
+                    if (c is Label)
+                    {
+                        foreach (var category in setting.Categories)
+                        {
+                            if (category.Category == c.Name)
+                            {
+                                category.Color = colorDialog.Color;
+                            }
+                        }
+                        updateSettings();
+                        break;
+                    }
+                }
+            }
         }
         private void createRowAddingPanel(int y)
         {
@@ -73,18 +152,28 @@ namespace WorkTimer
             panel.Name = y.ToString();
             panel.Location = new Point(0, 27 * y);
 
-            panel.Controls.Add(createLabel(0, setting.Categories[y].ProcessName));
-            panel.Controls.Add(createLabel(100, setting.Categories[y].Category));
+            panel.Controls.Add(createLabel(0, setting.Categories[y].ProcessName, "processName"));
+            panel.Controls.Add(createLabel(100, setting.Categories[y].Category, "category"));
             panel.Controls.Add(createDeleteButton(y));
 
             panels.Controls.Add(panel);
         }
-        private Label createLabel(int x, string text)
+        private Label createLabel(int x, string text, string type)
         {
             Label label = new Label();
             label.Location = new Point(x, 0);
             label.Text = text;
             label.AutoSize = true;
+
+            if (type == "category")
+            {
+                label.Name = "category";
+            }
+            else if (type == "processName")
+            {
+                label.Name = "processName";
+            }
+
 
             return label;
         }
@@ -102,6 +191,24 @@ namespace WorkTimer
         {
             int y = int.Parse(((Button)sender).Parent.Name);
 
+            int count = 0;
+            string text = "";
+            foreach (Control control in ((Button)sender).Parent.Controls)
+            {
+                if (control is Label && control.Name == "category")
+                {
+                    text = control.Text;
+                    foreach (var category in setting.Categories)
+                    {
+                        if (category.Category == text)
+                        {
+                            count++;
+                        }
+                    }
+                    break;
+                }
+            }
+
             setting.Categories.RemoveAt(y);
             updateSettings();
             panels.Controls.RemoveByKey(y.ToString());
@@ -114,6 +221,11 @@ namespace WorkTimer
                     control.Name = (int.Parse(control.Name) - 1).ToString();
                 }
             }
+            if (count == 1)
+            {
+                colorPanels.Controls.Clear();
+                createColorPanels();
+            }
         }
         private void addButton(object sender, EventArgs e)
         {
@@ -121,6 +233,15 @@ namespace WorkTimer
             int y = int.Parse(rowAddingPanel.Name);
             string processName = "";
             string category = "";
+
+            foreach (Control c in rowAddingPanel.Controls)
+            {
+                if (c.Text == "")
+                {
+                    return;
+                }
+            }
+
             foreach (Control c in rowAddingPanel.Controls)
             {
                 if (c.Name == "processName")
@@ -135,18 +256,39 @@ namespace WorkTimer
                 }
             }
 
-            setting.Categories.Add(new CategorySettings
+            bool found = false;
+            CategorySettings s = new CategorySettings();
+            foreach (var item in setting.Categories)
             {
-                Category = category,
-                ProcessName = processName
+                if (item.Category == category)
+                {
+                    s = new CategorySettings
+                    {
+                        Category = category,
+                        ProcessName = processName,
+                        Color = item.Color
+                    };
+                    found = true;
+                }
             }
-            );
+            if (!found)
+            {
+                s = new CategorySettings
+                {
+                    Category = category,
+                    ProcessName = processName
+                };
+            }
+            setting.Categories.Add(s);
+
             updateSettings();
 
             rowAddingPanel.Name = (y + 1).ToString();
             rowAddingPanel.Location = new Point(0, ((Button)sender).Parent.Location.Y + 27);
 
             createPanel(setting.Categories.Count - 1);
+            colorPanels.Controls.Clear();
+            createColorPanels();
         }
         private void button1_Click(object sender, EventArgs e)
         {
