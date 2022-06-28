@@ -26,8 +26,7 @@ namespace WorkTimer
 
         public delegate void InvokeDelegate();
 
-        List<(string processName, Color color)> alreadyPainted = new List<(string processName, Color color)>();
-
+        public List<Form> openForms = new List<Form>();
         //TODO: Write to a file, generate history
         /* Inactive minutes:
          * If user is inactive, start collecting inactive minutes
@@ -227,9 +226,18 @@ namespace WorkTimer
                 this.Hide();
                 this.ShowInTaskbar = false;
                 e.Cancel = true;
+                CloseForms();
             }
 
             base.OnFormClosing(e);
+        }
+
+        private void CloseForms()
+        {
+            foreach (Form form in openForms)
+            {
+                form.Dispose();
+            }
         }
 
         string GetCurrentLogPath()
@@ -282,26 +290,25 @@ namespace WorkTimer
         {
             int y = 1;
 
-            var settings = ReadJsonFile<Settings>("settings.json");
             
-            var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
+            var files = Directory.EnumerateFiles(Settings.LogPath).Where(f => f.Contains("json"));
 
 
-            var logs = GetLogsByDay(files, day, settings);
+            var logs = GetLogsByDay(files, day, Settings);
             logs = logs.OrderBy(l => l.Start).ToList();
 
             // filling the gaps between logs
-            logs = FillingTheGaps(logs, settings);
+            logs = FillingTheGaps(logs, Settings);
 
 
-            var logsOfMonth = GetLogsByMonth(files, day, settings);
+            var logsOfMonth = GetLogsByMonth(files, day, Settings);
             logsOfMonth = logsOfMonth.OrderBy(l => l.Start).ToList();
 
             double hoursOfMonth = 0;
 
             for (int i = 1; i < logsOfMonth.Count; i++)
             {
-                if ((logsOfMonth[i].Start - logsOfMonth[i - 1].End).TotalMinutes < settings.InactivityTresholdMinutes)
+                if ((logsOfMonth[i].Start - logsOfMonth[i - 1].End).TotalMinutes < Settings.InactivityTresholdMinutes)
                 {
                     logsOfMonth[i].Start = logsOfMonth[i - 1].End;
                 }
@@ -519,6 +526,7 @@ namespace WorkTimer
         {
             ChangeSettings settings = new ChangeSettings();
             settings.Show();
+            openForms.Add(settings);
         }
         private void monthCalendar1_DateChanged(object sender, DateRangeEventArgs e)
         {
@@ -527,6 +535,7 @@ namespace WorkTimer
             
             HoursOfWeek form = new HoursOfWeek();
             form.Show();
+            openForms.Add(form);
 
             double totalOfWeek = 0;
             var monday = currentDate.AddDays(-daysFromPreviousMonday);
@@ -572,16 +581,18 @@ namespace WorkTimer
         }
         private void buttonClick(object sender, EventArgs e, DateTime date)
         {
-            var settings = ReadJsonFile<Settings>("settings.json");
 
-            var files = Directory.EnumerateFiles(settings.LogPath).Where(f => f.Contains("json"));
+            var files = Directory.EnumerateFiles(Settings.LogPath).Where(f => f.Contains("json"));
 
-            var logs = GetLogsByDay(files, date, settings);
+            var logs = GetLogsByDay(files, date, Settings);
             logs = logs.OrderBy(l => l.Start).ToList();
-            logs = FillingTheGaps(logs, settings);
+            logs = FillingTheGaps(logs, Settings);
 
             HoursOfDay form = new HoursOfDay();
             form.Show();
+
+            openForms.Add(form);
+
             if (logs.Count == 0)
             {
                 return;
@@ -589,32 +600,55 @@ namespace WorkTimer
 
             string previousProcessName = "";
 
-            var stuff = new List<(string processName, DateTime start, DateTime end)>();
+            var stuff = new List<(string processName, string title, DateTime start, DateTime end)>();
 
-            DateTime start = DateTime.Now;
-            DateTime end = DateTime.Now;
+            DateTime start = new DateTime();
+            DateTime end = new DateTime();
 
             string startMinutes = "";
             string endMinutes = "";
 
+            var titles = new Dictionary<string, List<LogEntry>>();
+            int previousTotal = 0;
+            string mostMinutesTitle = "";
+
             for (int i = 0; i < logs.Count; i++)
             {
-                end = logs[i].End;
                 if (previousProcessName == "")
                 {
                     start = logs[i].Start;
                 }
-                else if (previousProcessName != logs[i].ProcessName || (logs[i].Start - logs[i - 1].End).TotalMinutes > 10)
+                else if (previousProcessName != logs[i].ProcessName || (logs[i].Start - logs[i - 1].End).TotalMinutes > Settings.InactivityTresholdMinutes)
                 {
                     end = logs[i - 1].End;
-                    stuff.Add((previousProcessName, start, end));
+                    previousTotal = 0;
+                    foreach (var titleLogs in titles)
+                    {
+                        int titleTotal = (int)titleLogs.Value.Sum(l => (l.End - l.Start).TotalMinutes);
+                        if (titleTotal > previousTotal)
+                        {
+                            previousTotal = titleTotal;
+                            mostMinutesTitle = titleLogs.Key;
+                        }
+                    }
+
+                    stuff.Add((previousProcessName, mostMinutesTitle, start, end));
                     start = logs[i].Start;
+                    titles = new Dictionary<string, List<LogEntry>>();
                 }
+
+                if (!titles.ContainsKey(logs[i].Title))
+                {
+                    titles[logs[i].Title] = new List<LogEntry>();
+                }
+                titles[logs[i].Title].Add(logs[i]);
                 previousProcessName = logs[i].ProcessName;
+                mostMinutesTitle = logs[i].Title;
+                end = logs[i].End;
             }
             end = logs[logs.Count - 1].End;
 
-            stuff.Add((previousProcessName, start, end));
+            stuff.Add((previousProcessName, mostMinutesTitle, start, end));
             form.Text = $"{date.Day}.{date.Month} {date.DayOfWeek}";
 
             double timeMultiplier = 0;
@@ -625,13 +659,15 @@ namespace WorkTimer
             panel.Location = new Point(20, 0);
 
             panel.AutoSize = true;
-            panel.Width = 200;
+
             form.Controls.Add(panel);
 
             form.AutoScroll = true;
 
             string previousEndTime = "";
             Random random = new Random();
+
+            var lines = new List<(Point start, Point end, Color color, string processName)>();
 
             for (int i = 0; i < stuff.Count; i++)
             {
@@ -653,7 +689,7 @@ namespace WorkTimer
                 Point startPoint = new Point(5, previousY + 8);
 
                 Label processNameLabel = new Label();
-                processNameLabel.Text = stuff[i].processName;
+                processNameLabel.Text = $"{stuff[i].processName} ({stuff[i].title})";
                 processNameLabel.AutoSize = true;
 
                 Label endLabel = new Label();
@@ -678,47 +714,55 @@ namespace WorkTimer
                 panel.Controls.Add(processNameLabel);
 
                 Point endPoint = new Point(5, previousY + 8);
-                string processName = stuff[i].processName;
 
-                Color c = Color.FromArgb(random.Next(20, 236), random.Next(20, 236), random.Next(20, 236));
-                panel.Paint += new PaintEventHandler((sender2, e2) => PaintLine(sender2, e2, startPoint, endPoint, processName, c));
+                bool found = false;
+                Color c = new Color();
+                foreach (var category in Settings.Categories)
+                {
+                    if (category.Category == stuff[i].processName)
+                    {
+                        found = true;
+                        if (!category.Color.IsEmpty)
+                        {
+                            c = category.Color;
+                            break;
+                        }
+                        c = Color.FromArgb(random.Next(20, 236), random.Next(20, 236), random.Next(20, 236));
+                        category.Color = c;
+                        updateSettings();
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    c = Color.FromArgb(random.Next(20, 236), random.Next(20, 236), random.Next(20, 236));
+                }
+                found = false;
+
+                lines.Add((startPoint, endPoint, c, stuff[i].processName));
             }
+            panel.Paint += new PaintEventHandler((sender2, e2) => PaintLine(sender2, e2, lines));
             Label footer = new Label();
             footer.Location = new Point(10, previousY + 16);
             panel.Controls.Add(footer);
+            form.Width = panel.Width + 60;
         }
-        private void PaintLine(object sender, PaintEventArgs e, Point start, Point end, string processName, Color c)
+        private void PaintLine(object sender, PaintEventArgs e, List<(Point start, Point end, Color color, string processName)> lines)
         {
+            Settings = ReadJsonFile<Settings>("settings.json");
             Graphics g = e.Graphics;
-            bool found = false;
-
-            foreach (var item in alreadyPainted)
+            foreach (var line in lines)
             {
-                if (item.processName == processName)
-                {
-                    c = item.color;
-                    found = true;
-                    Pen pen = new Pen(c, 5);
-                    g.DrawLine(pen, start.X, start.Y, end.X, end.Y);
-                    pen.Dispose();
-                    return;
-                }
-            }
-            if (!found)
-            {
+                Color c = line.color;
                 foreach (var category in Settings.Categories)
                 {
-                    if (category.Category == processName && category.Color.IsEmpty)
-                    {
-                        category.Color = c;
-                        updateSettings();
-                    }
-                    else if (category.Category == processName && !category.Color.IsEmpty)
+                    if (category.Category == line.processName)
                     {
                         c = category.Color;
                     }
                 }
-                alreadyPainted.Add((processName, c));
+                Pen pen = new Pen(c, 5);
+                g.DrawLine(pen, line.start.X, line.start.Y, line.end.X, line.end.Y);
             }
         }
         private void updateSettings()

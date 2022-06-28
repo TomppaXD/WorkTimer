@@ -173,8 +173,6 @@ namespace WorkTimer
             {
                 label.Name = "processName";
             }
-
-
             return label;
         }
         private Button createDeleteButton(int y)
