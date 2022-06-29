@@ -23,9 +23,9 @@ namespace WorkTimer
             numericUpDown1.Text = setting.InactivityTresholdMinutes.ToString();
 
             panels.Height = 0;
-            panels.AutoSize = true;
             panels.Location = new Point(10, 150);
             this.Controls.Add(panels);
+            panels.AutoSize = true;
 
             int y = 1;
             for (int i = 0; i < setting.Categories.Count; i++)
@@ -35,11 +35,13 @@ namespace WorkTimer
             }
             createRowAddingPanel(y);
 
-            colorPanels.AutoSize = true;
             colorPanels.Location = new Point(330, 15);
             this.Controls.Add(colorPanels);
 
-            createColorPanels();           
+            createColorPanels();
+            colorPanels.Height = 0;
+            colorPanels.AutoSize = true;
+            colorPanels.Width = 100;
         }
         private void createColorPanels()
         {
@@ -60,14 +62,14 @@ namespace WorkTimer
         private Panel createColorPanel(int y, (string, Color) category)
         {
             Panel panel = new Panel();
-            panel.Height = 0;
-            panel.AutoSize = true;
             panel.Name = y.ToString();
             panel.Location = new Point(0, y * 27);
 
             panel.Controls.Add(createCategoryText(category.Item1));
             panel.Controls.Add(createColorButton(category.Item2));
-
+            panel.Height = 0;
+            panel.AutoSize = true;
+            panel.Width = 100;
             return panel;
         }
         private Label createCategoryText(string text)
@@ -83,7 +85,6 @@ namespace WorkTimer
         {
             Button b = new Button();
             b.BackColor = color;
-            b.ForeColor = color;
             b.Location = new Point(100, 0);
             b.Size = new Size(25, 25);
             b.Click += new EventHandler(colorDialog);

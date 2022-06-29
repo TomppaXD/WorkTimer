@@ -600,7 +600,7 @@ namespace WorkTimer
 
             string previousProcessName = "";
 
-            var stuff = new List<(string processName, string title, DateTime start, DateTime end)>();
+            var rows = new List<(string processName, string title, DateTime start, DateTime end)>();
 
             DateTime start = new DateTime();
             DateTime end = new DateTime();
@@ -632,7 +632,7 @@ namespace WorkTimer
                         }
                     }
 
-                    stuff.Add((previousProcessName, mostMinutesTitle, start, end));
+                    rows.Add((previousProcessName, mostMinutesTitle, start, end));
                     start = logs[i].Start;
                     titles = new Dictionary<string, List<LogEntry>>();
                 }
@@ -648,7 +648,7 @@ namespace WorkTimer
             }
             end = logs[logs.Count - 1].End;
 
-            stuff.Add((previousProcessName, mostMinutesTitle, start, end));
+            rows.Add((previousProcessName, mostMinutesTitle, start, end));
             form.Text = $"{date.Day}.{date.Month} {date.DayOfWeek}";
 
             double timeMultiplier = 0;
@@ -669,34 +669,34 @@ namespace WorkTimer
 
             var lines = new List<(Point start, Point end, Color color, string processName)>();
 
-            for (int i = 0; i < stuff.Count; i++)
+            for (int i = 0; i < rows.Count; i++)
             {
-                startMinutes = stuff[i].start.Minute >= 10 ? stuff[i].start.Minute.ToString() : "0" + stuff[i].start.Minute.ToString();
-                endMinutes = stuff[i].end.Minute >= 10 ? stuff[i].end.Minute.ToString() : "0" + stuff[i].end.Minute.ToString();
+                startMinutes = rows[i].start.Minute >= 10 ? rows[i].start.Minute.ToString() : "0" + rows[i].start.Minute.ToString();
+                endMinutes = rows[i].end.Minute >= 10 ? rows[i].end.Minute.ToString() : "0" + rows[i].end.Minute.ToString();
 
-                if (previousEndTime != $"{stuff[i].start.Hour}:{startMinutes}")
+                if (previousEndTime != $"{rows[i].start.Hour}:{startMinutes}")
                 {
                     previousY += 20;
 
                     Label startLabel = new Label();
                     startLabel.AutoSize = true;
                     startLabel.Location = new Point(10, previousY);
-                    startLabel.Text = $"{stuff[i].start.Hour}:{startMinutes}";
+                    startLabel.Text = $"{rows[i].start.Hour}:{startMinutes}";
 
                     panel.Controls.Add(startLabel);
                 }
-                previousEndTime = $"{stuff[i].end.Hour}:{endMinutes}";
+                previousEndTime = $"{rows[i].end.Hour}:{endMinutes}";
                 Point startPoint = new Point(5, previousY + 8);
 
                 Label processNameLabel = new Label();
-                processNameLabel.Text = $"{stuff[i].processName} ({stuff[i].title})";
+                processNameLabel.Text = $"{rows[i].processName} ( {rows[i].title} )";
                 processNameLabel.AutoSize = true;
 
                 Label endLabel = new Label();
-                endLabel.Text = $"{stuff[i].end.Hour}:{endMinutes}";
+                endLabel.Text = $"{rows[i].end.Hour}:{endMinutes}";
                 endLabel.AutoSize = true;
                 
-                if ((stuff[i].end - stuff[i].start).TotalMinutes <= 5)
+                if ((rows[i].end - rows[i].start).TotalMinutes <= 5)
                 {
                     endLabel.Location = new Point(10, previousY + defaultGap);
                     processNameLabel.Location = new Point(20, defaultGap / 2 + previousY);
@@ -704,7 +704,7 @@ namespace WorkTimer
                 }
                 else
                 {
-                    int totalMinutes = (int)(stuff[i].end - stuff[i].start).TotalMinutes;
+                    int totalMinutes = (int)(rows[i].end - rows[i].start).TotalMinutes;
                     timeMultiplier = (2 * Math.Sqrt(840 * totalMinutes - 4175) + 270) / 7;
                     endLabel.Location = new Point(10, previousY + (int)timeMultiplier);
                     processNameLabel.Location = new Point(20, (int)timeMultiplier / 2 + previousY);
@@ -719,7 +719,7 @@ namespace WorkTimer
                 Color c = new Color();
                 foreach (var category in Settings.Categories)
                 {
-                    if (category.Category == stuff[i].processName)
+                    if (category.Category == rows[i].processName)
                     {
                         found = true;
                         if (!category.Color.IsEmpty)
@@ -737,17 +737,16 @@ namespace WorkTimer
                 {
                     c = Color.FromArgb(random.Next(20, 236), random.Next(20, 236), random.Next(20, 236));
                 }
-                found = false;
 
-                lines.Add((startPoint, endPoint, c, stuff[i].processName));
+                lines.Add((startPoint, endPoint, c, rows[i].processName));
             }
-            panel.Paint += new PaintEventHandler((sender2, e2) => PaintLine(sender2, e2, lines));
+            panel.Paint += new PaintEventHandler((sender2, e2) => PaintLines(sender2, e2, lines));
             Label footer = new Label();
             footer.Location = new Point(10, previousY + 16);
             panel.Controls.Add(footer);
             form.Width = panel.Width + 60;
         }
-        private void PaintLine(object sender, PaintEventArgs e, List<(Point start, Point end, Color color, string processName)> lines)
+        private void PaintLines(object sender, PaintEventArgs e, List<(Point start, Point end, Color color, string processName)> lines)
         {
             Settings = ReadJsonFile<Settings>("settings.json");
             Graphics g = e.Graphics;
